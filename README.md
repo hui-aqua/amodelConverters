@@ -1,4 +1,4 @@
-# Sim2Blender
+# A aquasim amodel converters
 
 Utilities for reading AquaSim `.amodel` files and exporting or visualizing their geometry.
 

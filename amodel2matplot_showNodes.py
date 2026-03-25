@@ -2,11 +2,14 @@ import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import sys
+from pathlib import Path
 
-file_path = "testFile1.amodel"   
+# Keep the input file hardcoded to match the simple workflow used in the other scripts.
+file_path = Path(__file__).resolve().parent / "amodelExamples" / "testFile1.amodel"
 tree = ET.parse(file_path)
 root = tree.getroot()
 
+# Read all node coordinates so they can be plotted directly.
 nodes = root.find('Nodes')
 
 x = []
@@ -20,7 +23,7 @@ for node in nodes:
     y.append(float(node.get('y')))
     z.append(float(node.get('z')))
 
-# Set same aspect ratio for x, y, z axes
+# Use one shared coordinate range so the 3D view is not visually distorted.
 all_coords = x + y + z
 min_val = min(all_coords)
 max_val = max(all_coords)
@@ -34,6 +37,7 @@ ax.set_zlim(min_val, max_val)
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_zlabel('Z')
+# Save the static figure so the result can be reused without reopening matplotlib.
 plt.savefig('nodes.png')
 plt.show()
 print("Plot saved as nodes.png")

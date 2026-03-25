@@ -2,13 +2,15 @@ import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import sys
+from pathlib import Path
 
-file_path = "testFile1.amodel"
+# Keep the input file hardcoded to match the simple workflow used in the other scripts.
+file_path = Path(__file__).resolve().parent / "amodelExamples" / "testFile1.amodel"
 
 tree = ET.parse(file_path)
 root = tree.getroot()
 
-# Parse nodes
+# Build a node lookup table so element connectivity can be resolved quickly.
 nodes = root.find('Nodes')
 node_dict = {}
 x = []
@@ -25,7 +27,7 @@ for node in nodes:
     y.append(ny)
     z.append(nz)
 
-# Set same aspect ratio
+# Use one shared coordinate range so the 3D view is not visually distorted.
 all_coords = x + y + z
 min_val = min(all_coords)
 max_val = max(all_coords)
@@ -34,7 +36,7 @@ fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 ax.scatter(x, y, z, s=1, color='black', label='Nodes')
 
-# Parse components
+# Split components by type because each type is drawn differently.
 components = root.find('Components')
 
 beams = []
@@ -49,7 +51,7 @@ for comp in components:
     elif comp.tag == 'membrane':
         membranes.append(comp)
 
-# Count elements
+# Count elements up front so the script prints a quick model summary.
 num_beams = len(beams)
 num_trusses = len(trusses)
 num_membranes = len(membranes)
@@ -78,7 +80,7 @@ print(f"Number of beam components: {num_beams}, elements: {beam_elements}")
 print(f"Number of truss components: {num_trusses}, elements: {truss_elements}")
 print(f"Number of membrane components: {num_membranes}, elements: {membrane_elements}")
 
-# Function to plot elements
+# Draw beam/truss members as lines and membranes as closed polygon edges.
 def plot_elements(ax, elements, color, label, elem_type):
     for elem in elements:
         elem_sec = elem.find('elements')
@@ -107,7 +109,7 @@ def plot_elements(ax, elements, color, label, elem_type):
                         else:
                             break
                     else:
-                        # plot lines
+                        # Plot the membrane outline by connecting the element corner nodes.
                         xs = [p[0] for p in points]
                         ys = [p[1] for p in points]
                         zs = [p[2] for p in points]
@@ -124,6 +126,7 @@ ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_zlabel('Z')
 ax.legend()
+# Save the static figure so the result can be reused without reopening matplotlib.
 plt.savefig('nodes_and_components.png')
 plt.show()
 print("Plot saved as nodes_and_components.png")

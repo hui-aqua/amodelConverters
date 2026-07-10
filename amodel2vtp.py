@@ -10,7 +10,7 @@ CELL_TYPE_MAP = {
 }
 
 # Keep the input file hardcoded to match the simple workflow used in the other scripts.
-file_path = Path(__file__).resolve().parent / "amodelExamples" / "testFile1.amodel"
+file_path = Path(__file__).resolve().parent / "amodelExamples" / "ENCC100323640.amodel"
 
 
 def parse_amodel(file_path: Path):
@@ -228,7 +228,9 @@ def write_vtp(output_path: Path, node_ids, node_points, line_cells, poly_cells):
 
 
 def default_output_path(input_path: Path):
-    return input_path.with_suffix(".vtp")
+    output_dir = Path(__file__).resolve().parent / "convertOutput"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir / input_path.with_suffix(".vtp").name
 
 
 def main():

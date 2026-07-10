@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 # Keep the input file hardcoded to match the simple workflow used in the other scripts.
-amodel_path = os.path.join(os.path.dirname(__file__), "amodelExamples", "testFile1.amodel")
+amodel_path = os.path.join(os.path.dirname(__file__), "amodelExamples", "ENCC100323640.amodel")
 tree = ET.parse(amodel_path)
 root = tree.getroot()
 
@@ -64,7 +64,10 @@ face_indices = [
 ]
 
 # Write vertices, line elements, and membrane faces to a single OBJ file.
-output_path_with_edges = os.path.join(os.path.dirname(__file__), "aquasim_geometry.obj")
+output_dir = os.path.join(os.path.dirname(__file__), "convertOutput")
+os.makedirs(output_dir, exist_ok=True)
+output_filename = os.path.splitext(os.path.basename(amodel_path))[0] + ".obj"
+output_path_with_edges = os.path.join(output_dir, output_filename)
 with open(output_path_with_edges, "w") as f:
     # OBJ vertices are written first and referenced later by 1-based index.
     for v in vertex_list:

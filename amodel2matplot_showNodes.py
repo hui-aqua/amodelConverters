@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 # Keep the input file hardcoded to match the simple workflow used in the other scripts.
-file_path = Path(__file__).resolve().parent / "amodelExamples" / "testFile1.amodel"
+file_path = Path(__file__).resolve().parent / "amodelExamples" / "ENCC100323640.amodel"
 tree = ET.parse(file_path)
 root = tree.getroot()
 
@@ -29,8 +29,15 @@ min_val = min(all_coords)
 max_val = max(all_coords)
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(x, y, z, s=1)
+ax = fig.add_subplot(projection='3d')
+ax.scatter(
+    xs=x,
+    ys=y,
+    zs=z,
+    s=1,
+    c='black',
+    label='Nodes'
+)
 ax.set_xlim(min_val, max_val)
 ax.set_ylim(min_val, max_val)
 ax.set_zlim(min_val, max_val)

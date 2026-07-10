@@ -1,82 +1,79 @@
-# A aquasim amodel converters
+# AquaSim AModel Converters
 
-Utilities for reading AquaSim `.amodel` files and exporting or visualizing their geometry.
+Lightweight Python utilities for reading, converting, and visualizing AquaSim `.amodel` structural files.
 
 ## Project Structure
 
 ```text
 Sim2Blender/
 ├── amodelExamples/
-│   ├── testFile1.amodel
+│   ├── ENCC100323640.amodel
 │   ├── riktig_amodel_ULS.amodel
-│   └── 693 ENCC 100 323640 36_SLS.amodel
+│   └── testFile1.amodel
+├── convertOutput/                      # Git-ignored output folder
+│   ├── ENCC100323640.obj
+│   └── ENCC100323640.vtp
 ├── amodel2matplot_showNodes.py
 ├── amodel2matplot_showNodesandtruss.py
 ├── amodel2obj.py
 ├── amodel2vtp.py
+├── .gitignore
 └── README.md
 ```
 
-The scripts are stored in the project root. Example `.amodel` files are stored in [`amodelExamples`](e:\GitProject\Sim2Blender\amodelExamples).
+The conversion scripts are located in the project root directory. Example `.amodel` input files are stored inside [`amodelExamples`](file:///c:/Users/hcheng/GitHub/Sim2Blender/amodelExamples).
 
 ## Scripts
 
-### `amodel2matplot_showNodes.py`
+### 1. `amodel2matplot_showNodes.py`
+Reads an `.amodel` file, plots all node coordinates in 3D using matplotlib, and saves the plot as:
+- `nodes.png` (in the project root)
 
-Reads `amodelExamples/testFile1.amodel`, plots all nodes in 3D with matplotlib, and saves:
+### 2. `amodel2matplot_showNodesandtruss.py`
+High-performance 3D visualization script that plots:
+- Nodes
+- Beams
+- Trusses
+- Membranes (outlined loop edges)
 
-- `nodes.png`
+**Performance Optimization:** Uses `Line3DCollection` from matplotlib to batch thousands of individual element lines into single draw calls, drastically speeding up rendering. Saves the resulting plot as:
+- `nodes_and_components.png` (in the project root)
 
-### `amodel2matplot_showNodesandtruss.py`
+### 3. `amodel2obj.py`
+Parses `.amodel` geometry and exports it as a standard Wavefront OBJ file inside the `convertOutput/` directory:
+- `convertOutput/<model_name>.obj`
 
-Reads `amodelExamples/testFile1.amodel`, plots:
+Beams and trusses are exported as line elements (`l`), and membranes are exported as polygon faces (`f`). This OBJ file can be imported directly into modeling tools like **Blender**.
 
-- nodes
-- beams
-- trusses
-- membranes
+### 4. `amodel2vtp.py`
+Parses `.amodel` geometry and structural metadata, exporting a VTK PolyData file inside the `convertOutput/` directory:
+- `convertOutput/<model_name>.vtp`
 
-and saves:
+This file is optimized for scientific visualization in **ParaView** and preserves:
+- Node coordinate positions
+- Beam and truss line elements
+- Membrane polygon elements
+- Structured cell/point data arrays (such as `node_id`, `component_type`, `component_id`, and `element_id`)
 
-- `nodes_and_components.png`
-
-### `amodel2obj.py`
-
-Reads `amodelExamples/testFile1.amodel` and exports geometry as:
-
-- `aquasim_geometry.obj`
-
-This OBJ file can be opened in tools such as Blender and ParaView.
-
-### `amodel2vtp.py`
-
-Reads `amodelExamples/testFile1.amodel` and exports VTK PolyData as:
-
-- `amodelExamples/testFile1.vtp`
-
-The generated `.vtp` file can be opened directly in ParaView. It preserves:
-
-- node positions
-- beam and truss line elements
-- membrane polygon elements
-- metadata arrays such as `node_id`, `component_type`, `component_id`, and `element_id`
+---
 
 ## Requirements
 
-Install the Python packages used by the scripts:
+Install the required Python packages:
 
 ```bash
 pip install matplotlib numpy
 ```
 
-Notes:
+*Note: `xml.etree.ElementTree`, `pathlib`, `os`, and `sys` are part of the Python standard library.*
 
-- `xml.etree.ElementTree`, `pathlib`, `os`, and `sys` are part of the Python standard library.
-- ParaView is only needed for viewing `.vtp`.
+---
 
 ## Usage
 
-Run any script from the project root:
+Each script has a hardcoded input model path at the top of the file (configured to `amodelExamples/ENCC100323640.amodel` by default). To process a different model, simply edit the `file_path` or `amodel_path` variable in the script.
+
+Run any converter from the project root:
 
 ```bash
 python amodel2matplot_showNodes.py
@@ -85,26 +82,4 @@ python amodel2obj.py
 python amodel2vtp.py
 ```
 
-Each script currently uses the hardcoded input model:
-
-```python
-amodelExamples/testFile1.amodel
-```
-
-If you want to process another example file, update the hardcoded path in the corresponding script.
-
-## Output Formats
-
-### OBJ
-
-- General-purpose geometry exchange format
-- Good for mesh and line geometry
-- Common in Blender and other modeling tools
-
-### VTP
-
-- VTK PolyData format
-- Better for ParaView and scientific visualization
-- Supports geometry plus structured metadata arrays
-
-For ParaView workflows, `amodel2vtp.py` is usually the better choice.
+All generated VTP and OBJ output files will automatically be placed in the `convertOutput/` directory, which is excluded from git tracking.

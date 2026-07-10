@@ -14,7 +14,7 @@ for node in root.findall(".//node"):
     x = float(node.get("x"))
     y = float(node.get("y"))
     z = float(node.get("z"))
-    node_dict[node_id] = (x, y, z)
+    node_dict[node_id] = (x, z, y)
 
 # Collect element connectivity grouped by OBJ primitive type.
 edges = []

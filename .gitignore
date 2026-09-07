@@ -1,2 +1,11 @@
-*.vtp
-*.obj
+# Generated Blender scenes, renders, simulation caches and validation logs.
+/output/
+
+# Python packaging and local environments.
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+*.blend1
+.venv/

@@ -1,4 +1,4 @@
-import sys
+"""Export active AModel geometry and metadata as VTK PolyData."""
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -9,104 +9,9 @@ CELL_TYPE_MAP = {
     "membrane": 3,
 }
 
-# Keep the input file hardcoded to match the simple workflow used in the other scripts.
-file_path = Path(__file__).resolve().parent / "amodelExamples" / "ENCC100323640.amodel"
-
-
-def parse_amodel(file_path: Path):
-    # Parse the AModel file into point coordinates plus element connectivity.
-    tree = ET.parse(file_path)
-    root = tree.getroot()
-
-    nodes_section = root.find("Nodes")
-    components_section = root.find("Components")
-
-    if nodes_section is None:
-        raise ValueError("Missing <Nodes> section in amodel file.")
-    if components_section is None:
-        raise ValueError("Missing <Components> section in amodel file.")
-
-    node_ids = []
-    node_points = []
-    node_index_by_id = {}
-
-    for node in nodes_section:
-        node_id = int(node.get("id"))
-        x = float(node.get("x"))
-        y = float(node.get("y"))
-        z = float(node.get("z"))
-
-        node_index_by_id[node_id] = len(node_ids)
-        node_ids.append(node_id)
-        node_points.append((x, y, z))
-
-    line_cells = []
-    poly_cells = []
-
-    for component in components_section:
-        component_tag = component.tag
-        if component_tag not in {"beam", "truss", "membrane"}:
-            continue
-
-        component_id = int(component.get("id", "0"))
-        component_name = component.get("name", f"{component_tag}_{component_id}")
-        elements_section = component.find("elements")
-        if elements_section is None:
-            continue
-
-        for element in elements_section:
-            element_id = int(element.get("id", "0"))
-
-            if component_tag in {"beam", "truss"}:
-                # ParaView stores beam and truss members as PolyData line cells.
-                start_node_id = element.get("StartNode_ID")
-                end_node_id = element.get("EndNode_ID")
-                if not start_node_id or not end_node_id:
-                    continue
-
-                start_node_id = int(start_node_id)
-                end_node_id = int(end_node_id)
-                if start_node_id not in node_index_by_id or end_node_id not in node_index_by_id:
-                    continue
-
-                line_cells.append(
-                    {
-                        "points": [
-                            node_index_by_id[start_node_id],
-                            node_index_by_id[end_node_id],
-                        ],
-                        "component_tag": component_tag,
-                        "component_id": component_id,
-                        "component_name": component_name,
-                        "element_id": element_id,
-                    }
-                )
-
-            elif component_tag == "membrane":
-                # Membranes are exported as polygon cells using their corner nodes.
-                membrane_node_ids = []
-                for attr in ("nodeA", "nodeB", "nodeC", "nodeD"):
-                    node_id = element.get(attr)
-                    if not node_id:
-                        continue
-                    membrane_node_ids.append(int(node_id))
-
-                if len(membrane_node_ids) < 3:
-                    continue
-                if any(node_id not in node_index_by_id for node_id in membrane_node_ids):
-                    continue
-
-                poly_cells.append(
-                    {
-                        "points": [node_index_by_id[node_id] for node_id in membrane_node_ids],
-                        "component_tag": component_tag,
-                        "component_id": component_id,
-                        "component_name": component_name,
-                        "element_id": element_id,
-                    }
-                )
-
-    return node_ids, node_points, line_cells, poly_cells
+def parse_amodel(file_path):
+    from sim2blender.amodel import read_model
+    return read_model(file_path).legacy()
 
 
 def format_points(points):
@@ -227,27 +132,19 @@ def write_vtp(output_path: Path, node_ids, node_points, line_cells, poly_cells):
     vtk_tree.write(output_path, encoding="utf-8", xml_declaration=True)
 
 
-def default_output_path(input_path: Path):
-    output_dir = Path(__file__).resolve().parent / "convertOutput"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir / input_path.with_suffix(".vtp").name
-
-
 def main():
-    input_path = Path(file_path)
-    output_path = default_output_path(input_path)
-
-    if not input_path.exists():
-        print(f"Input file not found: {input_path}", file=sys.stderr)
-        sys.exit(1)
-
-    node_ids, node_points, line_cells, poly_cells = parse_amodel(input_path)
-    write_vtp(output_path, node_ids, node_points, line_cells, poly_cells)
-
-    print(f"Saved: {output_path}")
-    print(f"Nodes: {len(node_points)}")
-    print(f"Line cells (beam + truss): {len(line_cells)}")
-    print(f"Polygon cells (membrane): {len(poly_cells)}")
+    from sim2blender.amodel import cli, read_model
+    args = cli("Export active AModel geometry and node constraints to VTP", ".vtp")
+    model = read_model(args.input)
+    data = build_piece_xml(*model.legacy())
+    point_data = data.find(".//PointData")
+    for axis, name in enumerate("xyz"):
+        array = ET.SubElement(point_data, "DataArray", type="Int32", Name="translate_"+name, format="ascii")
+        array.text = " ".join(str(int(n.translate[axis])) for n in model.nodes.values())
+    tree = ET.ElementTree(data)
+    ET.indent(tree, space="  ")
+    tree.write(args.output, encoding="utf-8", xml_declaration=True)
+    print(f"Saved: {args.output}")
 
 
 if __name__ == "__main__":

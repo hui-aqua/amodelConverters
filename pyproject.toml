@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sim2blender"
+version = "0.2.0"
+description = "AquaSim AModel geometry, cloth cages and fish visualization in Blender"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.6"]
+
+[project.scripts]
+amodel-obj = "sim2blender.obj:main"
+amodel-vtp = "sim2blender.vtp:main"
+amodel-plot = "sim2blender.plot:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

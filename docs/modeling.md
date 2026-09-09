@@ -1,5 +1,7 @@
 # Modeling assumptions
 
+This page primarily describes the **model-only Blender-physics workflow**. The **AquaSim replay workflow** uses exported node motion instead of cloth/rope simulation; see [the replay guide](guides/aquasim-replay.md) for its timing and geometry limits. Fish containment and appearance are shared by both workflows.
+
 ## Geometry and activity
 
 The reader accepts beam, truss and membrane components. Component `active` attributes and `description active` flags must agree; an explicit false disables a component. Missing element flags inherit component activity. Components without an activity declaration are excluded. Inactive nodes and elements referencing them are excluded; only nodes used by retained elements are exported. Duplicate IDs, missing connectivity and nonfinite coordinates raise errors.
@@ -26,9 +28,11 @@ All beams have passive rigid bodies with mesh collision shapes. Source-node atta
 
 The membrane surface is triangulated for BVH ray-parity and nearest-surface tests. A conservative bounding sphere encloses each fish at every orientation. Placement and movement require whole-fish clearance; ambiguous repeated ray hits reject the candidate. Moving cloth may require resampling a fish position, counted by `fish_relocations`.
 
+For a custom fish asset, the clearance radius is calculated from the normalized mesh, including fins, and stored as `fish_clearance_radius`. The procedural default retains its original sizing convention. Species labels do not change behavior; see [fish assets](guides/fish-assets.md).
+
 Coarse membrane boundary edges are split through existing nodes when a complete, unique finer boundary chain connects the same endpoints within 5 mm and 1% of the edge length. This joins the mismatched panel discretization in `riktig_amodel_ULS.amodel` (180 edge splits), keeping source node positions and one polygon per element. The joined topology is used by both Cloth and fish containment.
 
-Open shells require explicit `--cap-openings`. Only simple planar boundary loops are capped; the virtual caps affect containment but are not displayed or simulated. Remaining branched/nonmanifold shells fail. Self-intersections should be repaired in the source. There is no bounding-box or convex-hull containment fallback.
+In the model-only workflow, open shells require explicit `--cap-openings`. The replay fish stage adds and records these containment caps automatically. Only simple planar initial boundary loops are capped; the virtual caps affect containment but are not displayed or simulated. Remaining branched/nonmanifold shells fail. Self-intersections should be repaired in the source. There is no bounding-box or convex-hull containment fallback. Replay fish follow changing cage bounds as an artistic motion cue, but full surface containment is still checked after that movement.
 
 The older `ENCC100323640.amodel` contains overlapping nets; use `--membrane-ids 4 --cap-openings --pin-top` to select its outer shell. Fish animation uses constant keyframe interpolation and is certified at integer frames only. Subframes, motion blur and continuous fish–net contact are not certified.
 

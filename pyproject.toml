@@ -4,8 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sim2blender"
-version = "0.2.0"
-description = "AquaSim AModel geometry, cloth cages and fish visualization in Blender"
+version = "0.3.0"
+description = "Aquaculture simulation visualization in Blender: AquaSim replay, cage physics and replaceable fish assets"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
@@ -13,9 +14,9 @@ dependencies = []
 plots = ["matplotlib>=3.6"]
 
 [project.scripts]
-amodel-obj = "sim2blender.obj:main"
-amodel-vtp = "sim2blender.vtp:main"
-amodel-plot = "sim2blender.plot:main"
+amodel-obj = "sim2blender.exporters.obj:main"
+amodel-vtp = "sim2blender.exporters.vtp:main"
+amodel-plot = "sim2blender.exporters.plot:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -34,7 +34,7 @@ for frame in range(scene.frame_start, scene.frame_end+1):
     try:
         points = [v.co.copy() for v in mesh.vertices]
         volume = Enclosure(points, faces)
-        assert all(volume.contains(o.location, scene['fish_length']*.6) for o in fish), frame
+        assert all(volume.contains(o.location, scene.get('fish_clearance_radius', scene['fish_length']*.6)) for o in fish), frame
         max_cloth_displacement = max(max_cloth_displacement, max((p-v.co).length for p,v in zip(points,cage.data.vertices)))
         pins = cage.vertex_groups['Fixed nodes'].index
         for v, p in zip(cage.data.vertices,points):

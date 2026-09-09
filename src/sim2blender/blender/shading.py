@@ -151,7 +151,7 @@ def apply_visualization(scene,cage):
                 mat['material_description']='Black HDPE; non-metallic satin plastic'
         elif obj.get('component_type')=='truss':
             for mat in obj.data.materials:principled(mat,(.33,.21,.075),.6)
-        elif obj.name.startswith('Fish_'):
+        elif obj.name.startswith('Fish_') and not obj.get('fish_asset_custom', False):
             for mat in obj.data.materials:principled(mat,(.16,.48,.6),.32,.3)
     if cage.data.materials:principled(cage.data.materials[0],(.04,.2,.15),.48)
     studio(scene)

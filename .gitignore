@@ -1,6 +1,9 @@
 # Generated Blender scenes, renders, simulation caches and validation logs.
 /output/
 
+# Large local AquaSim result export; supply separately for the replay example.
+/examples/models/out.txt
+
 # Python packaging and local environments.
 build/
 dist/

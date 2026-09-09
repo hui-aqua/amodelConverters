@@ -8,7 +8,7 @@ import math
 
 
 def rope_centerline(model, cells, max_segment=.5):
-    from sim2blender.amodel import Node
+    from sim2blender.io.aquasim.model import Node
     nodes=[];edges=[];lookup={};element_ids=[]
     def source(nid):
         if nid not in lookup:
@@ -57,7 +57,7 @@ def sample_node_motion(obj,lookup,frames):
 
 def create_rope_cloth(model,cells,collection,frames,owners):
     import bpy
-    from sim2blender.blender.build import mesh_object,constrain_axes
+    from sim2blender.blender.scene import mesh_object,constrain_axes
     nodes,edges,lookup,element_ids=rope_centerline(model,cells)
     cell=cells[0];g=cell['geometry'];cid=cell['component_id']
     obj=mesh_object(f'Truss {cid}: {cell["component_name"]}',[n.point for n in nodes],edges,[],collection)

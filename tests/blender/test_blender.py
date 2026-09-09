@@ -96,6 +96,42 @@ class BlenderTests(unittest.TestCase):
             self.assertTrue(all(volume.contains(f.location,.12) for f in fish))
         self.assertNotEqual(tuple(fish[0].location), (0,0,0))
 
+    def test_school_follows_translating_enclosure(self):
+        scene = bpy.context.scene
+        cage = mesh_object('Moving enclosure', self.points, [], self.faces, scene.collection)
+        cage.location = (0, 0, 0)
+        cage.keyframe_insert('location', frame=1)
+        cage.location = (0, 0, 5)
+        cage.keyframe_insert('location', frame=2)
+        fish = add_fish_school(cage, self.faces, fish_count=5, frames=2,
+                               fish_length=.1, speed=0, advect=True)
+        scene.frame_set(1)
+        initial = [obj.location.copy() for obj in fish]
+        scene.frame_set(2)
+        for obj, start in zip(fish, initial):
+            self.assertLess((obj.location-start-Vector((0, 0, 5))).length, 1e-5)
+        self.assertEqual(scene['fish_relocations'], 0)
+
+    def test_school_speed_uses_video_seconds(self):
+        scene = bpy.context.scene
+        old_fps, old_base = scene.render.fps, scene.render.fps_base
+        scene.render.fps, scene.render.fps_base = 25, 1
+        try:
+            cage = mesh_object('Timed enclosure', [Vector(p)*100 for p in self.points], [], self.faces, scene.collection)
+            fish = add_fish_school(cage, self.faces, fish_count=1, frames=26,
+                                   fish_length=.1, speed=.6, advect=True)
+            scene.frame_set(1)
+            previous = fish[0].location.copy()
+            distance = 0
+            for frame in range(2, 27):
+                scene.frame_set(frame)
+                current = fish[0].location.copy()
+                distance += (current-previous).length
+                previous = current
+            self.assertAlmostEqual(distance, .6, places=4)
+        finally:
+            scene.render.fps, scene.render.fps_base = old_fps, old_base
+
     def test_fixed_vertex_cloth_pin(self):
         import tempfile
         from types import SimpleNamespace

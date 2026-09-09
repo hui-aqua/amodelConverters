@@ -1,72 +1,67 @@
 # Development and validation
 
-## Layout and entry points
+## Working structure
 
-`src/sim2blender` is an installable Python package. `amodel.py` and `geometry.py` contain shared parsing and section interpretation. `obj.py`, `vtp.py` and `plot.py` are CLI modules. Blender imports stay inside the `blender/` package or inside Blender-only functions, so ordinary exports and unit tests do not require `bpy`.
+See [architecture](architecture.md) for module responsibilities and extension conventions. Blender entry points insert `src/` into their import path; readers and exporters also work as an installable Python package.
 
-`blender/build.py` assembles and bakes a scene. `geometry.py` creates beam sections and round net strands; `ropes.py` simulates rope centerlines and attachment targets; `shading.py` creates packed textures, materials and lights. Blender entry scripts add `src/` to their import path, so Blender needs no editable install.
+```powershell
+python -m pip install -e .
+python -m sim2blender.exporters.obj examples/models/winch_cage.amodel
+python -m sim2blender.exporters.vtp examples/models/winch_cage.amodel
+```
 
-| Previous entry | Current entry |
-|---|---|
-| `amodel2blender.py` | `scripts/build_scene.py` |
-| `amodel2obj.py` | `python -m sim2blender.obj` |
-| `amodel2vtp.py` | `python -m sim2blender.vtp` |
-| Two `amodel2matplot_*` scripts | `python -m sim2blender.plot` with optional `--nodes-only` |
-| `amodelExamples/` | `examples/models/` |
-| `BlenderFile/` | `examples/reference/` |
-| `convertOutput/` | `output/` |
-
-The long WINCH filename became `winch_cage.amodel`; source XML contents were not edited. Obsolete wrapper scripts, temporary probes, bytecode, local test dependencies and redundant generated exports are not part of the cleaned project.
+For optional plots, install `.[plots]` and use `python -m sim2blender.exporters.plot`. The `amodel-obj`, `amodel-vtp` and `amodel-plot` console commands remain available.
 
 ## Tests
 
-From the repository root, run the ordinary Python tests:
+Run from the repository root:
 
 ```powershell
+$env:PYTHONPATH = 'src'
 python -m unittest discover -s tests -p 'test_*.py' -v
-```
 
-Then run Blender integration tests:
-
-```powershell
 $blender = 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe'
 & $blender --background --factory-startup --python-exit-code 1 --python tests/blender/test_blender.py
 & $blender --background --factory-startup --python-exit-code 1 --python tests/blender/test_geometry.py
 & $blender --background --factory-startup --python-exit-code 1 --python tests/blender/test_rope_dynamics.py
+& $blender --background --factory-startup --python-exit-code 1 --python tests/blender/test_fish_assets.py
+& $blender --background --factory-startup --python-exit-code 1 --python tests/blender/test_workflows.py
 ```
 
-These 19 tests cover activity flags, malformed data, XYZ/export consistency, net texture transparency/coverage, concave containment, fixed/partial-axis constraints, physical section dimensions, rope sag, moving attachments and post-cloth rope diameter.
+If the Windows Python app alias fails, substitute Blender's bundled interpreter:
+`& 'C:/Program Files/Blender Foundation/Blender 5.2/5.2/python/bin/python.exe' -m unittest discover -s tests -p 'test_*.py' -v`.
 
-After building the WINCH trial, verify the saved artifact:
+Python tests cover source validation, exports, timing and legacy imports. Blender tests cover enclosure geometry, constraints, cloth/rope behavior, source dimensions, shared-node attachment, fish speed, custom-asset sizing/materials/clearance, and both complete workflows on a small fixture. Integration fixtures are temporary; generated user scenes are not overwritten.
+
+The restructuring and static fish-asset port passed **37 tests** (14 Python, 9 enclosure/school, 6 geometry, 4 rope and 4 fish-asset tests), plus the end-to-end workflow script. The latter builds both workflow variants with a custom fish asset, reopens the saved replay, checks fractional timing and verifies 24 fish/frame containment cases.
+
+## Verify saved artifacts
 
 ```powershell
-& $blender --background output/fish_cage.blend --python-exit-code 1 --python tests/validation/verify_geometry_blend.py
-& $blender --background output/fish_cage.blend --python-exit-code 1 --python tests/validation/verify_rope_blend.py
-& $blender --background output/fish_cage.blend --python-exit-code 1 --python tests/validation/verify_saved_blend.py
-& $blender --background output/fish_cage.blend --python-exit-code 1 --python tests/validation/verify_visualization.py
+& $blender --background output/aquasim_fish.blend --python-exit-code 1 `
+  --python tests/validation/verify_results_blend.py
 ```
 
-The geometry/rope checks are tailored to the supplied 1,000-fish WINCH trial. `verify_saved_blend.py` also renders an overview. They read the `.blend` without saving changes and write reports into `output/`.
+The replay validator reopens source files and checks original connectivity, solver-ID mapping, physical timing, source-key and video-frame positions, hidden enclosure positions, fish clearance, packed net textures, studio lighting and camera framing. Display modifiers are disabled only during coordinate checks and restored for a final-frame preview. It writes `.validation.json` and `_last.png`; it does not save scene edits.
 
-| Report | Checks |
+For the original 1,000-fish WINCH cloth example, `verify_geometry_blend.py`, `verify_rope_blend.py`, `verify_saved_blend.py` and `verify_visualization.py` remain under `tests/validation/`. Those checks are tailored to that example; they do not validate arbitrary input models.
+
+## Migration map
+
+| Previous implementation path | Canonical implementation |
 |---|---|
-| `fish_cage.geometry.json` | Source section data, dimensions and inference warnings |
-| `geometry_validation.json` | Beam mesh dimensions and rope rest-centerline dimensions |
-| `rope_validation.json` | Rope caches, rigid supports, shared nodes and deformation |
-| `validation.json` | Fish containment, fixed nodes and membrane bake |
+| `sim2blender.amodel` | `sim2blender.io.aquasim.model` |
+| `sim2blender.geometry` | `sim2blender.io.aquasim.sections` |
+| `sim2blender.results` | `sim2blender.io.aquasim.results`; shared timing in `core.timeline` |
+| `sim2blender.obj`, `vtp`, `plot` | `sim2blender.exporters.*` |
+| `sim2blender.blender.build` | `workflows.model_physics`, `blender.scene`, `blender.enclosure`, `blender.fish.school` |
+| Implementation in `scripts/animate_results.py` | `workflows.replay_geometry` |
+| Implementation in `scripts/style_replay.py` | `workflows.replay_fish` |
 
-## Regenerate documentation assets
+Old imports and script entry points are compatibility facades. New commands use `scripts/run_workflow.py -- model`, `-- replay`, or `-- fish`. `replay` and `fish` are the two stages of the second user workflow, not two independent simulation backends.
 
-```powershell
-& $blender --background output/fish_cage.blend --python-exit-code 1 --python scripts/render_previews.py
-python -m pip install -e '.[plots]'
-python scripts/plot_project_stats.py
-```
+Input examples retain their current filenames and paths because saved scenes record source paths. Existing `.blend` animations do not need rebuilding merely because Python modules moved. Changing fish geometry, physics or timing does require rebuilding the dependent animation. Keep user-edited scenes and create new `-o` outputs for trials.
 
-The render script writes the overview and net close-up in `docs/assets/`; it does not modify the saved scene. The chart script reads component counts and diameters directly from `examples/models/winch_cage.amodel`.
+## Maintenance utilities
 
-## Working on simulation changes
-
-Use a separate `--output` for short trials. The scene builder validates fish before saving. Do not reuse downstream shape-key targets or fish animation after changing upstream cloth, geometry or attachment topology. Rebuild the full dependency chain.
-
-For material-only changes, use `scripts/refresh_scene.py` on an existing generated scene. It updates materials, metric UVs, lights and preview settings, verifies that cloth caches remain baked, and saves the opened file.
+`scripts/refresh_scene.py` refreshes materials on the original cloth scene. `render_previews.py` and `plot_project_stats.py` regenerate the original documentation images/plots. Their entry points remain stable. New fish assets belong in `assets/fish/`; large future datasets should use explicit user-managed input paths and generated caches under `output/`.

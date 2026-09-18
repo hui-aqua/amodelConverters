@@ -6,7 +6,7 @@ import re
 import sys
 
 from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, Qt, QThread, QTimer, Signal, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices, QPalette
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
@@ -16,6 +16,36 @@ from sim2blender.core.paths import PROJECT_ROOT
 from sim2blender.gui.model_job import ModelJob, ReplayJob, find_blender, inspect_model
 from sim2blender.io.aquasim.results import inspect_results
 from sim2blender.core.timeline import wave_timing
+
+
+def light_palette():
+    """Return the application's light palette, independent of the OS theme."""
+    palette=QPalette()
+    colors={
+        QPalette.ColorRole.Window:'#f1f5f7',
+        QPalette.ColorRole.WindowText:'#192d3b',
+        QPalette.ColorRole.Base:'#ffffff',
+        QPalette.ColorRole.AlternateBase:'#f1f5f7',
+        QPalette.ColorRole.ToolTipBase:'#ffffff',
+        QPalette.ColorRole.ToolTipText:'#192d3b',
+        QPalette.ColorRole.Text:'#192d3b',
+        QPalette.ColorRole.Button:'#e3edf2',
+        QPalette.ColorRole.ButtonText:'#192d3b',
+        QPalette.ColorRole.BrightText:'#ffffff',
+        QPalette.ColorRole.Highlight:'#087e8b',
+        QPalette.ColorRole.HighlightedText:'#ffffff',
+        QPalette.ColorRole.PlaceholderText:'#8998a1',
+        QPalette.ColorRole.Link:'#087e8b',
+        QPalette.ColorRole.Light:'#ffffff',
+        QPalette.ColorRole.Midlight:'#edf3f6',
+        QPalette.ColorRole.Mid:'#c6d5de',
+        QPalette.ColorRole.Dark:'#8998a1',
+        QPalette.ColorRole.Shadow:'#536875',
+    }
+    for role,color in colors.items():palette.setColor(role,QColor(color))
+    for role in (QPalette.ColorRole.WindowText,QPalette.ColorRole.Text,QPalette.ColorRole.ButtonText):
+        palette.setColor(QPalette.ColorGroup.Disabled,role,QColor('#8998a1'))
+    return palette
 
 
 class Inspector(QThread):
@@ -46,6 +76,13 @@ class ResultsInspector(Inspector):
 class MainWindow(QMainWindow):
     def __init__(self,settings_path=None):
         super().__init__()
+        # Fusion still inherits the Windows system palette. Pin this deliberately
+        # light interface to a light palette so dark mode cannot leak through
+        # unstyled container margins or native editor subcontrols.
+        app=QApplication.instance()
+        palette=light_palette()
+        if app is not None:app.setPalette(palette)
+        self.setPalette(palette)
         self.setWindowTitle('Sim2Blender — AquaSim scene builder')
         self.resize(1120,850)
         self.settings=QSettings(str(settings_path or PROJECT_ROOT/'output'/'gui-settings.ini'),QSettings.Format.IniFormat)
@@ -92,13 +129,13 @@ class MainWindow(QMainWindow):
         if previous:self.model.setText(previous)
 
     def _build_ui(self):
-        root=QWidget();self.setCentralWidget(root)
+        root=QWidget();root.setObjectName('AppRoot');self.setCentralWidget(root)
         layout=QVBoxLayout(root);layout.setContentsMargins(24,20,24,20);layout.setSpacing(16)
         title=QLabel('Sim2Blender');title.setObjectName('Title');layout.addWidget(title)
         subtitle=QLabel('AquaSim model → animated Blender scene');subtitle.setObjectName('Subtitle');layout.addWidget(subtitle)
         split=QSplitter();layout.addWidget(split,1)
         scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setMinimumWidth(520)
-        self.form=QWidget();left=QVBoxLayout(self.form);left.setContentsMargins(0,0,14,0);left.setSpacing(14)
+        self.form=QWidget();self.form.setObjectName('FormPanel');left=QVBoxLayout(self.form);left.setContentsMargins(0,0,14,0);left.setSpacing(14)
         scroll.setWidget(self.form);split.addWidget(scroll)
         files=QGroupBox('1   Select inputs');f=QFormLayout(files)
         self.workflow=QComboBox();self.workflow.addItems(['Model → Blender physics + salmon','AquaSim results replay'])
@@ -149,7 +186,7 @@ class MainWindow(QMainWindow):
         a.addRow('Swimming speed',self.speed);a.addRow('Random seed',self.seed)
         self.advanced.setVisible(False);self.advanced_toggle.toggled.connect(self.advanced.setVisible);left.addWidget(self.advanced)
         left.addStretch()
-        right=QWidget();r=QVBoxLayout(right);r.setContentsMargins(12,0,0,0)
+        right=QWidget();right.setObjectName('StatusPanel');r=QVBoxLayout(right);r.setContentsMargins(12,0,0,0)
         status_title=QLabel('Build status');status_title.setObjectName('SectionTitle');r.addWidget(status_title)
         self.status=QLabel('Ready to select a model');self.status.setWordWrap(True);r.addWidget(self.status)
         self.progress=QProgressBar();self.progress.setRange(0,100);self.progress.setValue(0);r.addWidget(self.progress)
@@ -170,7 +207,8 @@ class MainWindow(QMainWindow):
         self.wave_period.valueChanged.connect(self.update_duration)
         self.frames_per_wave.valueChanged.connect(self.update_duration)
         self.setStyleSheet('''
-            QMainWindow, QScrollArea { background: #f1f5f7; }
+            QMainWindow, QWidget#AppRoot, QWidget#FormPanel, QWidget#StatusPanel,
+            QScrollArea, QScrollArea > QWidget > QWidget { background: #f1f5f7; }
             QWidget { color: #192d3b; font-family: "Segoe UI"; font-size: 13px; }
             QScrollArea { border: none; }
             QLabel#Title { font-size: 29px; font-weight: 700; color: #123e50; }
@@ -180,15 +218,19 @@ class MainWindow(QMainWindow):
             QGroupBox { background: white; border: 1px solid #d5e0e5; border-radius: 8px;
                         margin-top: 12px; padding: 17px 12px 12px; font-weight: 600; }
             QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }
-            QLineEdit, QSpinBox, QDoubleSpinBox, QListWidget { background: white; border: 1px solid #c6d5de;
+            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QListWidget { background: white; color: #192d3b;
+                        border: 1px solid #c6d5de;
                         border-radius: 4px; padding: 6px; }
+            QComboBox QAbstractItemView { background: white; color: #192d3b;
+                        selection-background-color: #087e8b; selection-color: white; }
             QPlainTextEdit { background: #132733; color: #dce9ef; border-radius: 6px;
                             padding: 10px; font-family: Consolas; font-size: 12px; }
             QPushButton { background: #e3edf2; border: 1px solid #c9d9e2; border-radius: 5px; padding: 9px 14px; }
             QPushButton:hover { background: #d3e5ee; }
             QPushButton#Primary { background: #087e8b; color: white; font-weight: 600; padding: 12px 25px; }
             QPushButton:disabled { background: #e4e9ec; color: #8998a1; }
-            QProgressBar { border: 1px solid #c6d5de; border-radius: 4px; text-align: center; height: 20px; }
+            QProgressBar { background: white; color: #192d3b; border: 1px solid #c6d5de;
+                           border-radius: 4px; text-align: center; height: 20px; }
             QProgressBar::chunk { background: #42a5ad; }
         ''')
 
@@ -448,7 +490,7 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    app=QApplication(sys.argv);app.setApplicationName('Sim2Blender');app.setStyle('Fusion')
+    app=QApplication(sys.argv);app.setApplicationName('Sim2Blender');app.setStyle('Fusion');app.setPalette(light_palette())
     window=MainWindow();window.show()
     sys.exit(app.exec())
 

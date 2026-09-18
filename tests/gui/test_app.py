@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QColor,QPalette
 from PySide6.QtTest import QTest
 from PySide6.QtCore import Qt
 from sim2blender.gui.app import MainWindow
@@ -142,6 +143,20 @@ class GuiTests(unittest.TestCase):
             self.window.start_build();until(lambda:not self.window.running)
         self.assertIn('Could not start',self.window.status.text())
         self.assertFalse(self.window.open_button.isEnabled())
+
+    def test_light_palette_is_independent_of_system_theme(self):
+        dark=QPalette()
+        dark.setColor(QPalette.ColorRole.Window,QColor('#202124'))
+        dark.setColor(QPalette.ColorRole.Base,QColor('#202124'))
+        dark.setColor(QPalette.ColorRole.Text,QColor('#ffffff'))
+        APP.setPalette(dark)
+        themed=MainWindow(self.folder/'dark-theme-settings.ini')
+        try:
+            self.assertEqual(themed.palette().color(QPalette.ColorRole.Window).name(),'#f1f5f7')
+            self.assertEqual(themed.workflow.palette().color(QPalette.ColorRole.Base).name(),'#ffffff')
+            self.assertEqual(themed.workflow.palette().color(QPalette.ColorRole.Text).name(),'#192d3b')
+        finally:
+            themed.close();themed.deleteLater();APP.processEvents()
 
 
 if __name__=='__main__':unittest.main()

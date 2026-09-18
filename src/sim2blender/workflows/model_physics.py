@@ -30,7 +30,25 @@ def build(args):
     seam_splits = sum(map(len, faces)) - source_corner_count
     if seam_splits:
         print(f'Stitched membrane seams using {seam_splits} existing intermediate nodes', flush=True)
-    caps = boundary_caps(faces, points, args.cap_openings)
+    try:
+        caps = boundary_caps(faces, points, args.cap_openings)
+    except ValueError as exc:
+        from collections import defaultdict
+        edge_components = defaultdict(list)
+        for face, cell in zip(faces, membrane):
+            for a, b in zip(face, face[1:] + face[:1]):
+                edge_components[tuple(sorted((a, b)))].append(cell['component_id'])
+        junctions = [owners for owners in edge_components.values() if len(owners) > 2]
+        names = {c['component_id']: c['component_name'] for c in membrane}
+        selected = ', '.join(f'{cid} ({names[cid]})' for cid in sorted(names))
+        detail = f' Selected membrane components: {selected}.'
+        if junctions:
+            involved = sorted({cid for owners in junctions for cid in owners})
+            detail += (f' {len(junctions)} edges have more than two incident faces'
+                       f' in components {", ".join(map(str, involved))}.'
+                       ' Select only the enclosing walls and bottom with --membrane-ids;'
+                       ' exclude attached flaps and internal sheets.')
+        raise ValueError(str(exc) + detail) from None
     # Validate geometry before touching the scene.
     Enclosure(points, faces + caps).sample(random.Random(args.seed), args.fish_length*.6)
     scene = bpy.data.scenes.new('AModel fish cage')
@@ -106,7 +124,7 @@ def build(args):
     geometry_report += rope_report
     scene['rope_cloth_count'] = len(ropes)
     add_fish_school(cage, faces + caps, args.fish_count, args.frames, args.fish_length, args.speed, args.seed,
-                    fish_asset=getattr(args, 'fish_asset', None), fish_object=getattr(args, 'fish_object', None), species=getattr(args, 'fish_species', 'generic'))
+                    fish_asset=getattr(args, 'fish_asset', None), fish_object=getattr(args, 'fish_object', None), species=getattr(args, 'fish_species', 'Atlantic salmon'))
     round_net(cage, membrane, ids)
     scene['simulation_note'] = 'Membrane and ropes use baked Cloth; beams are passive rigid supports. Shared nodes use one-way baked attachments, without force feedback. Virtual caps are containment-only. Fish validated at integer frames.'
     scene.frame_set(1)
@@ -129,7 +147,7 @@ def main(argv=None):
     parser.add_argument('-o', '--output', type=Path, default=PROJECT_ROOT/'output'/'fish_cage.blend')
     parser.add_argument('--fish-count', type=int, default=1000)
     parser.add_argument('--frames', type=int, default=120)
-    parser.add_argument('--fish-length', type=float, default=.6)
+    parser.add_argument('--fish-length', type=float, default=.775)
     parser.add_argument('--speed', type=float, default=.6)
     parser.add_argument('--seed', type=int, default=7)
     parser.add_argument('--membrane-ids', type=int, nargs='+')

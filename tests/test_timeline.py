@@ -1,9 +1,21 @@
 import unittest
-from sim2blender.core.timeline import frames_from_seconds, sample_frames
+from sim2blender.core.timeline import frames_from_seconds, sample_frames, wave_timing
 from sim2blender.core.paths import PROJECT_ROOT
 
 
 class TimelineTests(unittest.TestCase):
+    def test_wave_timeline_matches_replay(self):
+        for count,period,per_wave,fps in ((406,10.,80,25),(3,6.,40,25),(1,5.,40,30)):
+            timing=wave_timing(count,period,per_wave,fps)
+            self.assertEqual(timing['last_sample_frame'],sample_frames(count,period/per_wave,fps)[-1])
+            self.assertAlmostEqual(timing['duration_seconds'],(count-1)*period/per_wave)
+        timing=wave_timing(406,10,80,25)
+        self.assertEqual(timing['duration_seconds'],50.625)
+        self.assertEqual(timing['video_frame_end'],1267)
+        self.assertAlmostEqual(timing['video_duration_seconds'],50.68)
+        for count,period,per_wave,fps in ((0,5,40,25),(3,0,40,25),(3,5,0,25),(3,5,2.5,25),(3,5,40,0)):
+            with self.assertRaises(ValueError):wave_timing(count,period,per_wave,fps)
+
     def test_shared_origin_for_independent_sources(self):
         self.assertEqual(frames_from_seconds([10, 10.125], 25, origin_seconds=10), [1, 4.125])
         for actual, expected in zip(frames_from_seconds([10.04, 10.08], 25, origin_seconds=10), [2, 3]):

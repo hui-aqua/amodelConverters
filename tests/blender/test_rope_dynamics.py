@@ -40,6 +40,13 @@ class RopeTests(unittest.TestCase):
         self.assertEqual([m.type for m in obj.modifiers],['CLOTH','NODES'])
         mesh=obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
         self.assertGreater(len(mesh.polygons),0)
+        self.assertTrue(all(p.use_smooth == (len(p.vertices)==4) for p in mesh.polygons))
+        from sim2blender.blender.rope_shading import preprocess_rope_segments
+        group=obj.modifiers['Rope surface'].node_group
+        count=len(group.nodes)
+        preprocess_rope_segments([obj]);preprocess_rope_segments([obj])
+        self.assertEqual(len(group.nodes),count)
+        self.assertEqual(len(obj.modifiers),2)
         self.assertAlmostEqual(max((v.co.y**2+v.co.z**2)**.5 for v in mesh.vertices),.015,places=5)
 
     def test_moving_attachment_and_fixed_source(self):

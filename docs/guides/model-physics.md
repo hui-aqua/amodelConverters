@@ -2,12 +2,12 @@
 
 Input: one AquaSim `.amodel`. Output: a Blender scene with illustrative membrane/rope physics, rigid beam supports, materials and contained fish. This workflow does not read `out.txt`.
 
-From the repository root:
+Use the [GUI](gui.md) for file pickers or the [CLI](cli.md) for commands. From the repository root:
 
 ```powershell
 $blender = 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe'
 & $blender --background --factory-startup --python-exit-code 1 `
-  --python scripts/run_workflow.py -- model examples/models/winch_cage.amodel `
+  --python launchers/cli/run_workflow.py -- model examples/models/winch_cage.amodel `
   --cap-openings --pin-top --fish-count 1000 --frames 120 `
   -o output/fish_cage.blend
 ```
@@ -18,7 +18,7 @@ Play frames 1–120 at the workflow's existing 24 fps default. Use Material Prev
 |---|---|
 | `--frames` | 120 Blender simulation frames |
 | `--fish-count` | 1000; use 0 for a cage-only scene |
-| `--fish-length` | 0.6 m sizing parameter; see the fish asset guide |
+| `--fish-length` | 0.775 m nose-to-tail length; nominal 5 kg salmon |
 | `--speed` | 0.6 m/s of artistic swimming |
 | `--seed` | 7, deterministic placement and motion |
 | `--membrane-ids` | Select an enclosing subset of active membranes |

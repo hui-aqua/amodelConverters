@@ -26,7 +26,7 @@ def _check_packed_textures(tree, seen=None):
             _check_packed_textures(node.node_tree, seen)
 
 
-def load_fish_template(length=.6, asset=None, object_name=None):
+def load_fish_template(length=.775, asset=None, object_name=None):
     """Meshes face +X, with +Z up. Custom assets are centered and sized to length.
 
     Mesh geometry/materials are shared by every fish; swimming is independent
@@ -39,14 +39,10 @@ def load_fish_template(length=.6, asset=None, object_name=None):
     if asset is None:
         if object_name:
             raise ValueError('--fish-object requires --fish-asset')
-        verts = [(0.5,0,0), (0,.16,0), (0,0,.22), (0,-.16,0), (0,0,-.18), (-.32,0,0), (-.55,.22,0), (-.55,-.22,0), (-.18,0,.36)]
-        polys = [(0,1,2),(0,2,3),(0,3,4),(0,4,1),(5,2,1),(5,3,2),(5,4,3),(5,1,4),(5,6,7),(5,8,2)]
-        mesh = bpy.data.meshes.new('Shared fish geometry')
-        mesh.from_pydata([tuple(v*length for v in p) for p in verts], [], polys)
-        material = bpy.data.materials.new('Silver blue fish')
-        material.diffuse_color = (.12,.48,.65,1)
-        mesh.materials.append(material)
-        return FishTemplate(mesh, length*.6, False, 'builtin')
+        from sim2blender.blender.fish.salmon import salmon_mesh
+        mesh = salmon_mesh(length)
+        return FishTemplate(mesh, max(v.co.length for v in mesh.vertices) + length*1e-5,
+                            False, 'builtin:atlantic_salmon')
     path = Path(asset).resolve()
     if path.suffix.lower() != '.blend' or not path.is_file():
         raise ValueError(f'Fish asset must be an existing .blend file: {path}')
@@ -87,4 +83,4 @@ def load_fish_template(length=.6, asset=None, object_name=None):
 def add_fish_asset_arguments(parser):
     parser.add_argument('--fish-asset', type=Path, help='Custom static fish mesh in a .blend file')
     parser.add_argument('--fish-object', help='Object name inside --fish-asset')
-    parser.add_argument('--fish-species', default='generic', help='Species label stored in the scene; does not alter swimming behavior')
+    parser.add_argument('--fish-species', default='Atlantic salmon', help='Species label stored in the scene; does not alter swimming behavior')

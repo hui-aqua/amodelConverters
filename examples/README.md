@@ -11,4 +11,6 @@
 
 Filenames are retained so existing scripts and saved scene source paths remain usable. Generated output belongs in `output/`, and reusable species appearance belongs in `assets/fish/`. Do not mix future particle/CFD datasets with the AquaSim example pair; introduce clearly named dataset folders when real examples are available.
 
-The full `models/out.txt` export is approximately 99 MiB and is intentionally excluded from Git. Supply the matching AquaSim export locally at that path, or pass an explicit results path to the replay command. The small end-to-end tests generate their own synthetic results and do not require this file.
+The local `models/out.txt` export is intentionally excluded from Git. Supply the matching AquaSim export locally at that path, or pass an explicit results path to the replay command. The small end-to-end tests generate their own synthetic results and do not require this file.
+
+Local cases `944ENR.amodel`, `ferdigModell.amodel`, `SLS_01.avz`, and the case-specific `extractNotd.bat` helper are also excluded from Git. They remain at their existing paths for saved-scene compatibility. Put new personal models and exports in `inputs/models/` and `inputs/results/`.

@@ -12,10 +12,10 @@ Fish appearance is separated from schooling in `src/sim2blender/blender/fish/`. 
 ```powershell
 # Append these options to the model or fish workflow command:
 --fish-asset assets/fish/salmon.blend --fish-object Salmon `
---fish-species atlantic-salmon --fish-length 0.6
+--fish-species atlantic-salmon --fish-length 0.775
 ```
 
-No salmon model is bundled; this is an example asset name. `--fish-object` may be omitted only when the file contains exactly one object. Non-mesh, animated, parented, modifier-dependent, empty and invalid assets are rejected with an error.
+A procedural Atlantic salmon is built in (77.5 cm, nominal 5 kg). No separate salmon asset file is bundled; this is an example filename for a custom asset you supply. `--fish-object` may be omitted only when the file contains exactly one object. Non-mesh, animated, parented, modifier-dependent, empty and invalid assets are rejected with an error.
 
 ## What the importer does
 

@@ -116,16 +116,16 @@ def studio(scene):
     scene.cycles.transparent_max_bounces=16
     scene.render.resolution_x=1400;scene.render.resolution_y=1100;scene.render.resolution_percentage=100
     scene.view_settings.view_transform='AgX'
-    scene.view_settings.exposure=1
+    scene.view_settings.exposure=0
     if scene.world is None:scene.world=bpy.data.worlds.new('Cage studio')
     scene.world.use_nodes=True
     bg=scene.world.node_tree.nodes.get('Background')
-    bg.inputs['Color'].default_value=(.055,.085,.13,1);bg.inputs['Strength'].default_value=.45
+    bg.inputs['Color'].default_value=(.055,.085,.13,1);bg.inputs['Strength'].default_value=.2
     cage=scene.objects['Membrane cage']
     points=[v.co for v in cage.data.vertices]
     target=Vector(tuple((min(p[a] for p in points)+max(p[a] for p in points))/2 for a in range(3)))
     scale=max((max(p.z for p in points)-min(p.z for p in points))/50, .01)
-    for name,location,power,size,color in [('Key softbox',(35,-55,35),180000,65,(.8,.91,1)),('Warm fill',(-55,-15,-20),110000,50,(1,.78,.54)),('Rim',(15,55,-5),220000,60,(.45,.78,1))]:
+    for name,location,power,size,color in [('Key softbox',(35,-55,35),45000,65,(.8,.91,1)),('Warm fill',(-55,-15,-20),27500,50,(.8,.86,1)),('Rim',(15,55,-5),44000,60,(.45,.68,1))]:
         obj=scene.objects.get(name)
         if obj is None:
             obj=bpy.data.objects.new(name,bpy.data.lights.new(name,'AREA'));scene.collection.objects.link(obj)
@@ -139,19 +139,23 @@ def studio(scene):
 
 
 def apply_visualization(scene,cage):
+    from sim2blender.blender.beam_shading import preprocess_hdpe_beams
+    preprocess_hdpe_beams(scene.objects)
+    from sim2blender.blender.rope_shading import preprocess_rope_segments
+    preprocess_rope_segments(scene.objects)
     shade_net(cage)
     for obj in scene.objects:
         if obj.type!='MESH':continue
         if obj.get('component_type')=='beam':
             for mat in obj.data.materials:
                 shader=principled(mat,(.005,.005,.005),.5,0)
-                shader.inputs['IOR'].default_value=1.0
+                shader.inputs['IOR'].default_value=1.5
                 shader.inputs['Coat Weight'].default_value=0
                 shader.inputs['Transmission Weight'].default_value=0
                 mat['material_description']='Black HDPE; non-metallic satin plastic'
         elif obj.get('component_type')=='truss':
             for mat in obj.data.materials:principled(mat,(.33,.21,.075),.6)
         elif obj.name.startswith('Fish_') and not obj.get('fish_asset_custom', False):
-            for mat in obj.data.materials:principled(mat,(.16,.48,.6),.32,.3)
+            for mat in obj.data.materials:principled(mat,tuple(mat.diffuse_color[:3]),.32,.3)
     if cage.data.materials:principled(cage.data.materials[0],(.04,.2,.15),.48)
     studio(scene)

@@ -6,6 +6,18 @@ from sim2blender.results import read_results, map_nodes, sample_frames
 
 
 class ResultsTests(unittest.TestCase):
+    def test_streaming_sample_count(self):
+        from sim2blender.io.aquasim.results import inspect_results
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'out.txt'
+            path.write_text('Time [-] VID [-] X Y Z\n'+''.join(f'{t} {vid} 0 0 0\n' for t in (10,20,30) for vid in (1,2,3,4)))
+            info=inspect_results(path)
+            self.assertEqual(info['samples'],3)
+            self.assertEqual(info['nodes_per_sample'],4)
+            self.assertEqual(info['last_label'],30)
+            self.assertEqual(info['samples'],len(read_results(path).times))
+            with self.assertRaises(InterruptedError):inspect_results(path,lambda:True)
+
     def test_physical_timeline(self):
         frames = sample_frames(406, .125, 25)
         self.assertEqual(frames[:3], [1, 4.125, 7.25])

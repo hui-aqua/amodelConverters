@@ -13,6 +13,15 @@ from sim2blender.blender.scene import mesh_object
 
 
 class FishAssetTests(unittest.TestCase):
+    def test_default_salmon_dimensions_and_mass(self):
+        template = load_fish_template()
+        points = [v.co for v in template.mesh.vertices]
+        self.assertAlmostEqual(max(p.x for p in points)-min(p.x for p in points), .775, places=6)
+        self.assertEqual(template.mesh['nominal_weight_kg'], 5)
+        self.assertTrue(all(p.length < template.clearance_radius for p in points))
+        self.assertLess(max(p.y for p in points)-min(p.y for p in points), .2)
+        self.assertEqual(template.source, 'builtin:atlantic_salmon')
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.path = Path(self.directory.name)/'species.blend'

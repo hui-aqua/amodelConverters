@@ -22,11 +22,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-o', '--output', type=Path, default=Path('output/aquasim_fish.blend'))
     parser.add_argument('--fish-count', type=int, default=1000)
-    parser.add_argument('--fish-length', type=float, default=.6)
+    parser.add_argument('--fish-length', type=float, default=.775)
     parser.add_argument('--speed', type=float, default=.6)
     parser.add_argument('--seed', type=int, default=7)
     parser.add_argument('--samples', type=int, default=64)
     parser.add_argument('--skip-render', action='store_true')
+    parser.add_argument('--membrane-ids', type=int, nargs='+', help='Membranes used for fish containment; all source membranes remain visible')
+    parser.add_argument('--no-cap-openings', action='store_false', dest='cap_openings', default=True)
     from sim2blender.blender.fish.assets import add_fish_asset_arguments
     add_fish_asset_arguments(parser)
     args = parser.parse_args(argv if argv is not None else (sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else []))
@@ -42,6 +44,11 @@ def main(argv=None):
     groups = defaultdict(list)
     for cell in membrane:
         groups[cell['component_id']].append(cell)
+    if args.membrane_ids:
+        missing=set(args.membrane_ids)-groups.keys()
+        if missing:raise ValueError(f'Unknown active membrane components: {sorted(missing)}')
+        membrane=[c for c in membrane if c['component_id'] in args.membrane_ids]
+    if not membrane:raise ValueError('No active membrane elements selected for fish containment')
     sources = [o for o in scene.objects if 'model_node_ids' in o]
     net_objects = [o for o in sources if o.name.startswith('membrane_')]
     if not net_objects:
@@ -52,7 +59,7 @@ def main(argv=None):
     points = [model.nodes[n].point for n in ids]
     faces = [tuple(indices[n] for n in c['nodes']) for c in membrane]
     faces = stitch_membrane_seams(faces, points)
-    caps = boundary_caps(faces, points, allow_caps=True)
+    caps = boundary_caps(faces, points, allow_caps=args.cap_openings)
     # A combined, non-rendered shell is used only for fish containment.
     cage = mesh_object('Membrane cage', points, [], faces+caps, scene.collection)
     cage.hide_render = True

@@ -1,8 +1,20 @@
 # Generated Blender scenes, renders, simulation caches and validation logs.
 /output/
 
+# Personal AquaSim input files; keep the folder structure and instructions.
+/inputs/models/*
+!/inputs/models/.gitkeep
+/inputs/results/*
+!/inputs/results/.gitkeep
+
 # Large local AquaSim result export; supply separately for the replay example.
 /examples/models/out.txt
+
+# Local cases and their case-specific export helper (not bundled examples).
+/examples/models/944ENR.amodel
+/examples/models/ferdigModell.amodel
+/examples/models/SLS_01.avz
+/examples/models/extractNotd.bat
 
 # Python packaging and local environments.
 build/
@@ -12,3 +24,21 @@ __pycache__/
 *.py[cod]
 *.blend1
 .venv/
+
+# Test, analysis and editor caches.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.blend[0-9]*
+*.build.log
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local credentials and environment overrides.
+.env
+.env.*
+!.env.example

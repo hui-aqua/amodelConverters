@@ -19,12 +19,20 @@ def main(argv=None):
     parser.add_argument('-o', '--output', type=Path, default=Path('output/aquasim_replay.blend'))
     parser.add_argument('--fps', type=int, default=25, help='Video frames per second')
     parser.add_argument('--step-seconds', type=float, default=.125, help='Seconds between structural samples')
+    parser.add_argument('--wave-period', type=float, help='Wave period in seconds; derives sample interval with --frames-per-wave')
+    parser.add_argument('--frames-per-wave', type=int, default=40, help='AquaSim structural intervals per wave cycle, not video frames')
+    parser.add_argument('--skip-render', action='store_true', help='Save the replay without rendering a preview')
     args = parser.parse_args(argv if argv is not None else (sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else []))
     if args.fps < 1: parser.error('--fps must be positive')
+    if args.wave_period is not None:
+        from sim2blender.core.timeline import wave_timing
+        args.step_seconds=wave_timing(1,args.wave_period,args.frames_per_wave,args.fps)['step_seconds']
+    print('Reading AquaSim model and results...', flush=True)
     model = read_model(args.model)
     results = read_results(args.results)
     frames = sample_frames(len(results.times), args.step_seconds, args.fps)
     mapping = map_nodes(model, results)
+    print(f'Replay timing: {len(results.times)} samples, {frames[-1]:g} last sample frame, {args.fps} fps', flush=True)
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
     scene = bpy.context.scene
@@ -35,6 +43,9 @@ def main(argv=None):
     scene['source_times'] = results.times
     scene['source_frames'] = frames
     scene['structural_step_seconds'] = args.step_seconds
+    if args.wave_period is not None:
+        scene['wave_period_seconds']=args.wave_period
+        scene['structural_frames_per_wave']=args.frames_per_wave
     scene['duration_seconds'] = (len(frames)-1)*args.step_seconds
     scene['time_units'] = 'Source labels retained; physical time = sample index * structural_step_seconds'
     scene['amodel_path'] = str(args.model.resolve())
@@ -44,6 +55,7 @@ def main(argv=None):
         groups[(cell['component_tag'], cell['component_id'])].append(cell)
     animated = []
     for (tag, cid), cells in groups.items():
+        print(f'Replaying {tag} component {cid}', flush=True)
         ids = sorted({n for cell in cells for n in cell['nodes']})
         indices = {nid:i for i,nid in enumerate(ids)}
         topology = [tuple(indices[n] for n in cell['nodes']) for cell in cells]
@@ -107,10 +119,13 @@ def main(argv=None):
     scene.frame_set(1)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     report = dict(steps=len(results.times), video_fps=args.fps, structural_step_seconds=args.step_seconds, last_sample_frame=frames[-1], video_frame_end=scene.frame_end, duration_seconds=scene['duration_seconds'], mapped_nodes=len(mapping), extra_result_nodes=len(results.positions[0])-len(mapping), objects=len(animated), max_coordinate_error=max_error, node_mapping=mapping)
+    if args.wave_period is not None:
+        report.update(wave_period_seconds=args.wave_period,structural_frames_per_wave=args.frames_per_wave)
     args.output.with_suffix('.json').write_text(json.dumps(report, indent=2))
     scene.render.filepath = str(args.output.with_suffix('.png').resolve())
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output.resolve()))
-    bpy.ops.render.render(write_still=True)
+    if not args.skip_render:
+        bpy.ops.render.render(write_still=True)
     print('REPLAY VERIFIED', {k:v for k,v in report.items() if k!='node_mapping'})
 
 

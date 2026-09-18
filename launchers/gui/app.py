@@ -1,0 +1,8 @@
+"""Desktop launcher; Windows users can double-click Start Sim2Blender.cmd."""
+from pathlib import Path
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
+
+if __name__=='__main__':
+    from sim2blender.gui.app import main
+    main()

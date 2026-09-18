@@ -12,6 +12,10 @@ dependencies = []
 
 [project.optional-dependencies]
 plots = ["matplotlib>=3.6"]
+gui = ["PySide6-Essentials>=6.8,<7"]
+
+[project.gui-scripts]
+sim2blender-gui = "sim2blender.gui.app:main"
 
 [project.scripts]
 amodel-obj = "sim2blender.exporters.obj:main"

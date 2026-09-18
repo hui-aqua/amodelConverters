@@ -3,7 +3,7 @@ import math
 import random
 from sim2blender.blender.enclosure import Enclosure
 
-def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.6, speed=.6, seed=7, advect=False, fish_asset=None, fish_object=None, species='generic'):
+def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.775, speed=.6, seed=7, advect=False, fish_asset=None, fish_object=None, species='Atlantic salmon'):
     """Bake deterministic schooling against evaluated cloth at every integer frame.
 
     A sphere encloses each fish, so orientation cannot violate wall clearance.
@@ -31,6 +31,10 @@ def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.6, sp
         obj.rotation_mode = 'QUATERNION'
         obj['fish_asset_custom'] = appearance.custom
         obj['fish_species'] = species
+        obj['fish_length_m'] = fish_length
+        if not appearance.custom:
+            obj['fish_species'] = 'Atlantic salmon'
+            obj['fish_weight_kg'] = template['nominal_weight_kg']
         fish.append(obj)
     positions = []
     velocities = []
@@ -95,7 +99,9 @@ def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.6, sp
     scene['fish_relocations'] = relocations
     scene['fish_clearance_radius'] = radius
     scene['fish_asset_source'] = appearance.source
-    scene['fish_species'] = species
+    scene['fish_species'] = species if appearance.custom else 'Atlantic salmon'
+    if not appearance.custom:
+        scene['fish_weight_kg'] = template['nominal_weight_kg']
     return fish
 
 

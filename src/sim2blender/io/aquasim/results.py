@@ -10,8 +10,11 @@ class Results:
     positions: list
 
 
-def read_results(path):
-    times, positions = [], []
+def iter_result_samples(path):
+    """Validate and stream one structural sample at a time (bounded memory)."""
+    current_time=None
+    current={}
+    first_ids=None
     with open(path, encoding='utf-8-sig') as source:
         header = next(source, '')
         if header.split() != ['Time', '[-]', 'VID', '[-]', 'X', 'Y', 'Z']:
@@ -24,21 +27,42 @@ def read_results(path):
                 t, vid, point = float(t), int(vid), (float(x), float(y), float(z))
                 if not all(math.isfinite(v) for v in (t, *point)):
                     raise ValueError('nonfinite value')
-                if not times or t != times[-1]:
-                    if times and t <= times[-1]:
+                if current_time is None or t != current_time:
+                    if current_time is not None and t <= current_time:
                         raise ValueError('time must increase')
-                    times.append(t)
-                    positions.append({})
-                if vid in positions[-1]:
+                    if current_time is not None:
+                        if first_ids is None:first_ids=set(current)
+                        if current.keys()!=first_ids:raise ValueError('Result node IDs differ between steps')
+                        yield current_time,current
+                    current_time=t
+                    current={}
+                if vid in current:
                     raise ValueError('duplicate VID')
-                positions[-1][vid] = point
+                current[vid] = point
             except ValueError as exc:
                 raise ValueError(f'{path}:{number}: {exc}') from exc
-    if not times:
+    if current_time is None:
         raise ValueError('No result samples')
-    if any(p.keys() != positions[0].keys() for p in positions):
+    if first_ids is not None and current.keys()!=first_ids:
         raise ValueError('Result node IDs differ between steps')
+    yield current_time,current
+
+
+def read_results(path):
+    times,positions=[],[]
+    for t,points in iter_result_samples(path):
+        times.append(t);positions.append(points)
     return Results(times, positions)
+
+
+def inspect_results(path, cancelled=None):
+    """Count distinct structural time blocks, not per-node coordinate rows."""
+    count=0
+    for t,points in iter_result_samples(path):
+        if cancelled and cancelled():raise InterruptedError('Results inspection cancelled')
+        if count==0:first=t
+        count+=1
+    return dict(samples=count,nodes_per_sample=len(points),first_label=first,last_label=t)
 
 
 def map_nodes(model, results):

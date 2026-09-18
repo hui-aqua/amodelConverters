@@ -2,6 +2,8 @@
 
 This workflow reads active connectivity from `.amodel` and absolute node positions from `out.txt`. AquaSim drives structural motion; Blender generates the fish and rendering.
 
+For daily use, follow the [GUI guide](gui.md) or the [one-command CLI guide](cli.md). Wave-period and total-frame calculations are explained in [Timing](timing.md). The commands and numerical values below describe the historical reference case; pair your own model with its matching results file.
+
 ## Build geometry, then add fish
 
 The large `examples/models/out.txt` export is a local input excluded from Git. Supply the matching AquaSim export before running these commands, or substitute an explicit local results path. Automated small-fixture tests generate their own data.
@@ -9,12 +11,12 @@ The large `examples/models/out.txt` export is a local input excluded from Git. S
 ```powershell
 $blender = 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe'
 & $blender --background --factory-startup --python-exit-code 1 `
-  --python scripts/run_workflow.py -- replay `
+  --python launchers/cli/run_workflow.py -- replay `
   examples/models/ENC172233860Winch_nearSurface.amodel examples/models/out.txt `
   --step-seconds 0.125 --fps 25 -o output/aquasim_replay.blend
 
 & $blender --background output/aquasim_replay.blend --python-exit-code 1 `
-  --python scripts/run_workflow.py -- fish --fish-count 1000 `
+  --python launchers/cli/run_workflow.py -- fish --fish-count 1000 `
   -o output/aquasim_fish.blend
 ```
 

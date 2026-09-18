@@ -149,6 +149,8 @@ def rope_surface(obj,diameter):
     l.new(tilt.outputs['Curve'],mesh.inputs['Curve']);l.new(profile.outputs['Geometry'],mesh.inputs['Profile Curve'])
     material=n.new('GeometryNodeSetMaterial');material.inputs['Material'].default_value=obj.data.materials[0]
     l.new(mesh.outputs['Mesh'],material.inputs['Geometry']);l.new(material.outputs['Geometry'],out.inputs['Geometry'])
+    from sim2blender.blender.rope_shading import smooth_generated_rope
+    smooth_generated_rope(g)
     obj.modifiers.new('Rope surface','NODES').node_group=g
 
 

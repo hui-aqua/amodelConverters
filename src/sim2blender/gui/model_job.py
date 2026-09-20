@@ -117,3 +117,62 @@ class ReplayJob(ModelJob):
                    '--speed',str(self.speed),'--seed',str(self.seed),'--membrane-ids',*[str(i) for i in self.membrane_ids]]
             if not self.cap_openings:args.append('--no-cap-openings')
         return program,args
+
+
+@dataclass
+class PipelineJob:
+    blender: Path
+    model: Path
+    output: Path
+    membrane_ids: list
+    cap_openings: bool = True
+    pin_top: bool = True
+    frames: int = 120
+    replay: dict | None = None
+    fish_schooling: dict | None = None
+    feed_animation: dict | None = None
+    fish_feeding: dict | None = None
+    cinematic_camera: dict | None = None
+
+    def command(self):
+        if not self.blender.is_file():
+            raise ValueError('Choose the Blender executable in Advanced settings.')
+        if not self.model.is_file() or self.model.suffix.lower() != '.amodel':
+            raise ValueError('Choose an existing AquaSim .amodel file.')
+        if self.output.suffix.lower() != '.blend':
+            raise ValueError('The output filename must end in .blend.')
+        if self.output.is_dir():
+            raise ValueError('Choose an output file, not a folder.')
+        if not self.membrane_ids:
+            raise ValueError('Select at least one enclosing membrane component.')
+        if self.replay and self.replay.get('enabled'):
+            results_path = Path(self.replay.get('results', ''))
+            if not results_path.is_file():
+                raise ValueError('Choose a valid AquaSim results text export (e.g. out.txt).')
+
+        job_dict = {
+            'model': str(self.model.resolve()),
+            'output': str(self.output.resolve()),
+            'membrane_ids': self.membrane_ids,
+            'cap_openings': self.cap_openings,
+            'pin_top': self.pin_top,
+            'frames': self.frames,
+            'replay': self.replay,
+            'fish_schooling': self.fish_schooling,
+            'feed_animation': self.feed_animation,
+            'fish_feeding': self.fish_feeding,
+            'cinematic_camera': self.cinematic_camera,
+        }
+        self.output.parent.mkdir(parents=True, exist_ok=True)
+        config_file = self.output.with_suffix('.job.json')
+        import json
+        config_file.write_text(json.dumps(job_dict, indent=2), encoding='utf-8')
+
+        runner = Path(__file__).resolve().parents[1] / 'cli' / 'blender_entry.py'
+        args = [
+            '--background', '--factory-startup', '--python-exit-code', '1',
+            '--python', str(runner),
+            '--', 'pipeline', '--config', str(config_file.resolve())
+        ]
+        return str(self.blender.resolve()), args
+

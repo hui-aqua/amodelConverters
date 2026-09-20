@@ -6,7 +6,8 @@ import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 
 WORKFLOWS={'model':'model_physics','replay':'replay_geometry',
-           'fish':'replay_fish','replay-scene':'replay_pipeline'}
+           'fish':'replay_fish','replay-scene':'replay_pipeline',
+           'pipeline':'unified_pipeline'}
 
 
 def main(argv=None):

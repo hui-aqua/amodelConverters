@@ -4,10 +4,40 @@ import tempfile
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
-from sim2blender.gui.model_job import ModelJob, ReplayJob, ModelInfo, inspect_model
+from sim2blender.gui.model_job import ModelJob, ReplayJob, PipelineJob, ModelInfo, inspect_model
 
 
 class ModelJobTests(unittest.TestCase):
+    def test_pipeline_job_command(self):
+        with tempfile.TemporaryDirectory(prefix='Pipeline paths ') as folder:
+            base = Path(folder)
+            model = base / 'cage.amodel'
+            model.touch()
+            exe = base / 'blender.exe'
+            exe.touch()
+            output = base / 'test_scene.blend'
+            job = PipelineJob(
+                blender=exe,
+                model=model,
+                output=output,
+                membrane_ids=[1, 2],
+                replay={'enabled': True, 'results': str(model)},  # results must exist
+                fish_schooling={'enabled': True, 'fish_count': 500},
+                feed_animation={'enabled': True, 'rpm': -30.0},
+                cinematic_camera={'enabled': True, 'focal_length_mm': 32.0},
+            )
+            program, args = job.command()
+            self.assertEqual(program, str(exe))
+            self.assertIn('pipeline', args)
+            self.assertIn('--config', args)
+            config_path = Path(args[args.index('--config') + 1])
+            self.assertTrue(config_path.is_file())
+            import json
+            data = json.loads(config_path.read_text(encoding='utf-8'))
+            self.assertEqual(data['membrane_ids'], [1, 2])
+            self.assertTrue(data['replay']['enabled'])
+            self.assertEqual(data['fish_schooling']['fish_count'], 500)
+
     def test_replay_command_options(self):
         with tempfile.TemporaryDirectory(prefix='Replay paths ') as folder:
             base=Path(folder)

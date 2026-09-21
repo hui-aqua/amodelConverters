@@ -116,3 +116,24 @@ Open the `.blend` in Blender, press Space over the Timeline to play, and use Mat
 Further reading: [GUI](docs/guides/gui.md), [CLI](docs/guides/cli.md), [timing](docs/guides/timing.md), [fish assets](docs/guides/fish-assets.md), [beam/rope shading](docs/guides/shading.md), [modeling limits](docs/modeling.md), [architecture](docs/architecture.md), and [development/tests](docs/development.md).
 
 Feed-pellet and CFD solvers are planned extensions, not implemented features; see the [roadmap](docs/roadmap.md).
+
+### Irregular ocean waves
+
+In Environment Settings > Ocean Wave Parameters, select **JONSWAP irregular**.
+Height becomes significant wave height **Hs** and period becomes peak period **Tp**.
+Adjust peak enhancement gamma (default 3.3), component count (64), random seed
+(42), and heading spread (20 degrees standard deviation; 0 for long-crested seas).
+The seed reproduces the same animation. Regular waves remain the default.
+
+JONSWAP uses linear deep-water components with seeded phases and frequencies
+between 0.5 and 3 times the peak frequency, normalized to `Hs = 4 sqrt(m0)`.
+Component wavelengths follow deep-water dispersion, so manual wavelength is
+available only for regular waves. Surface animation and ambient fish/feed water
+velocities use the spectrum; cloth WIND forcing remains an approximate global
+surge. Existing AquaSim structural replay is unchanged.
+
+JSON environment configuration accepts `wave_type: "jonswap"`,
+`wave_height_m` (Hs), `wave_period_s` (Tp), `jonswap_gamma`, `wave_components`,
+`wave_seed`, and `wave_spread_deg`. Irregular surfaces default to 160 subdivisions;
+`surface_resolution` overrides this. Short waves or large surface extents need a
+finer grid; higher resolution and longer animations increase bake time and file size.

@@ -220,6 +220,7 @@ def compute_particle_trajectory(
     wave_period: float = 5.0,
     wave_length: float = 30.0,
     wave_dir_deg: float = 0.0,
+    spectrum_options: dict | None = None,
     start_time_s: float = 0.0,
 ) -> tuple[list[Vector], list[Vector]]:
     """Numerically integrate particle trajectory considering air drag, water drag, buoyancy, current and waves."""
@@ -248,6 +249,7 @@ def compute_particle_trajectory(
             wave_length=wave_length,
             wave_dir_deg=wave_dir_deg,
             water_level=water_level_z,
+            **(spectrum_options or {}),
         )
         in_water = pos.z <= surface_elev
         rho = water_density if in_water else air_density
@@ -266,6 +268,7 @@ def compute_particle_trajectory(
                 wave_length=wave_length,
                 wave_dir_deg=wave_dir_deg,
                 water_level=water_level_z,
+                **(spectrum_options or {}),
             )
             v_rel = vel - v_water
         else:
@@ -319,6 +322,7 @@ def add_particle_animation(
     wave_period: float = 5.0,
     wave_length: float = 30.0,
     wave_dir_deg: float = 0.0,
+    spectrum_options: dict | None = None,
     start_time_s: float = 0.0,
 ) -> None:
     death_frame = min(end_frame + 1.0, emit_frame + lifetime_s * fps)
@@ -349,6 +353,7 @@ def add_particle_animation(
         wave_length=wave_length,
         wave_dir_deg=wave_dir_deg,
         start_time_s=start_time_s,
+        spectrum_options=spectrum_options,
     )
 
     sample_frames = [emit_frame]
@@ -405,6 +410,8 @@ def run_feed_animation(config: dict | None = None) -> None:
     wave_height = float(cfg.get("wave_height_m", cfg.get("wave_height", scene.get("wave_height_m", 0.0))))
     wave_period = float(cfg.get("wave_period_s", cfg.get("wave_period", scene.get("wave_period_s", 5.0))))
     wave_length = float(cfg.get("wave_length_m", cfg.get("wave_length", scene.get("wave_length_m", 30.0))))
+    from sim2blender.core.waves import wave_options
+    spectrum_options = wave_options({**wave_options(scene), **cfg})
     wave_dir_deg = float(cfg.get("wave_direction_deg", cfg.get("wave_dir_deg", scene.get("wave_direction_deg", 0.0))))
 
     particle_rate = mass_flow_kg_min / 60.0 / visual_particle_mass_kg
@@ -565,6 +572,7 @@ def run_feed_animation(config: dict | None = None) -> None:
             wave_length=wave_length,
             wave_dir_deg=wave_dir_deg,
             start_time_s=emit_time_global,
+            spectrum_options=spectrum_options,
         )
 
     scene["feed_rotation_rpm"] = rpm

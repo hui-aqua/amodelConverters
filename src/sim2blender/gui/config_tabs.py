@@ -14,6 +14,16 @@ from sim2blender.core.paths import PROJECT_ROOT
 
 class ConfigTabsMixin:
     """Mixin providing pipeline stage configuration tabs for MainWindow."""
+    def _update_wave_model(self, *_):
+        irregular = self.env_wave_type.currentData() == 'jonswap'
+        self.env_height_label.setText('Significant height Hs:' if irregular else 'Height H:')
+        self.env_period_label.setText('Peak period Tp:' if irregular else 'Period T:')
+        self.env_wave_length.setEnabled(not irregular)
+        self.env_wave_length.setToolTip('JONSWAP wavelengths follow deep-water dispersion for each period.')
+        for widget in (self.env_jonswap_gamma, self.env_wave_components,
+                       self.env_wave_seed, self.env_wave_spread_deg):
+            widget.setEnabled(irregular)
+
     def _apply_env_preset(self, index: int):
         if index == 0:  # Calm Sea (Default)
             self.env_wave_height.setValue(0.30)
@@ -98,9 +108,11 @@ class ConfigTabsMixin:
         self.env_wave_period.setDecimals(2)
         self.env_wave_period.setValue(6.0)
         self.env_wave_period.setSuffix(' s')
-        w_row1.addWidget(QLabel('Height H:'))
+        self.env_height_label = QLabel('Height H:')
+        w_row1.addWidget(self.env_height_label)
         w_row1.addWidget(self.env_wave_height)
-        w_row1.addWidget(QLabel('Period T:'))
+        self.env_period_label = QLabel('Period T:')
+        w_row1.addWidget(self.env_period_label)
         w_row1.addWidget(self.env_wave_period)
         fwave.addRow('Wave Dimensions', w_row1)
 
@@ -121,6 +133,28 @@ class ConfigTabsMixin:
         w_row2.addWidget(QLabel('Direction:'))
         w_row2.addWidget(self.env_wave_dir)
         fwave.addRow('Wave Propagation', w_row2)
+        self.env_wave_type = QComboBox()
+        self.env_wave_type.addItem('Regular', 'regular')
+        self.env_wave_type.addItem('JONSWAP irregular', 'jonswap')
+        fwave.insertRow(0, 'Wave Model', self.env_wave_type)
+        self.env_jonswap_gamma = QDoubleSpinBox()
+        self.env_jonswap_gamma.setRange(1, 10)
+        self.env_jonswap_gamma.setValue(3.3)
+        fwave.addRow('Peak enhancement gamma', self.env_jonswap_gamma)
+        self.env_wave_components = QSpinBox()
+        self.env_wave_components.setRange(8, 256)
+        self.env_wave_components.setValue(64)
+        fwave.addRow('Spectrum components', self.env_wave_components)
+        self.env_wave_seed = QSpinBox()
+        self.env_wave_seed.setRange(0, 2147483647)
+        self.env_wave_seed.setValue(42)
+        fwave.addRow('Random seed', self.env_wave_seed)
+        self.env_wave_spread_deg = QDoubleSpinBox()
+        self.env_wave_spread_deg.setRange(0, 90)
+        self.env_wave_spread_deg.setValue(20)
+        fwave.addRow('Heading spread (degrees, std. dev.)', self.env_wave_spread_deg)
+        self.env_wave_type.currentIndexChanged.connect(self._update_wave_model)
+        self._update_wave_model()
         v.addWidget(gb_waves)
 
         gb_current = QGroupBox('Water Current Vector')

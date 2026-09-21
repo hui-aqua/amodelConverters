@@ -28,6 +28,27 @@ def until(predicate,timeout=30):
 
 
 class GuiTests(unittest.TestCase):
+    def test_jonswap_controls_and_persistence(self):
+        w = self.window
+        self.assertEqual(w.env_wave_type.currentData(), 'regular')
+        self.assertFalse(w.env_jonswap_gamma.isEnabled())
+        w.env_wave_type.setCurrentIndex(1)
+        w.env_jonswap_gamma.setValue(4.5)
+        w.env_wave_seed.setValue(123)
+        self.assertFalse(w.env_wave_length.isEnabled())
+        self.assertIn('Hs', w.env_height_label.text())
+        w.close()
+        restored = MainWindow(self.folder/'settings.ini')
+        try:
+            self.assertEqual(restored.env_wave_type.currentData(), 'jonswap')
+            self.assertEqual(restored.env_jonswap_gamma.value(), 4.5)
+            self.assertEqual(restored.env_wave_seed.value(), 123)
+            self.assertTrue(restored.env_jonswap_gamma.isEnabled())
+        finally:
+            until(lambda:not restored.workers)
+            restored.close()
+            restored.deleteLater()
+
     def setup_replay(self):
         points=[(x,y,z) for z in (-2,2) for y in (-2,2) for x in (-2,2)]
         faces=[(0,1,3,2),(4,6,7,5),(0,4,5,1),(2,3,7,6),(0,2,6,4),(1,5,7,3)]
@@ -197,6 +218,35 @@ class GuiTests(unittest.TestCase):
         self.window.show()
         self.assertTrue(self.window.tab_config.isHidden())
         self.assertFalse(self.window.no_stages_placeholder.isHidden())
+
+    def test_beam_and_truss_selection_defaults_and_toggle(self):
+        # 1. Beams and trusses are populated
+        self.assertGreater(self.window.beam_components.count(), 0)
+        self.assertGreater(self.window.truss_components.count(), 0)
+
+        # 2. By default, they are all selected
+        self.assertEqual(len(self.window.selected_beam_ids()), self.window.beam_components.count())
+        self.assertEqual(len(self.window.selected_truss_ids()), self.window.truss_components.count())
+
+        # 3. Initially hidden in advanced/hide options
+        self.assertFalse(self.window.beam_truss_container.isVisible())
+        self.assertIn('▸', self.window.beam_truss_toggle.text())
+
+        # 4. Toggling button expands container
+        self.window.beam_truss_toggle.setChecked(True)
+        self.assertTrue(self.window.beam_truss_container.isVisible())
+        self.assertIn('▾', self.window.beam_truss_toggle.text())
+
+        # 5. Quick selection buttons: None and All
+        self.window.select_no_beams()
+        self.assertEqual(len(self.window.selected_beam_ids()), 0)
+        self.window.select_all_beams()
+        self.assertEqual(len(self.window.selected_beam_ids()), self.window.beam_components.count())
+
+        self.window.select_no_trusses()
+        self.assertEqual(len(self.window.selected_truss_ids()), 0)
+        self.window.select_all_trusses()
+        self.assertEqual(len(self.window.selected_truss_ids()), self.window.truss_components.count())
 
 
 if __name__=='__main__':unittest.main()

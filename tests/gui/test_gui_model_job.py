@@ -21,6 +21,8 @@ class ModelJobTests(unittest.TestCase):
                 model=model,
                 output=output,
                 membrane_ids=[1, 2],
+                beam_ids=[1, 2, 3],
+                truss_ids=[25, 26],
                 replay={'enabled': True, 'results': str(model)},  # results must exist
                 fish_schooling={'enabled': True, 'fish_count': 500},
                 feed_animation={'enabled': True, 'rpm': -30.0},
@@ -35,6 +37,8 @@ class ModelJobTests(unittest.TestCase):
             import json
             data = json.loads(config_path.read_text(encoding='utf-8'))
             self.assertEqual(data['membrane_ids'], [1, 2])
+            self.assertEqual(data['beam_ids'], [1, 2, 3])
+            self.assertEqual(data['truss_ids'], [25, 26])
             self.assertTrue(data['replay']['enabled'])
             self.assertEqual(data['fish_schooling']['fish_count'], 500)
 
@@ -87,6 +91,10 @@ class ModelJobTests(unittest.TestCase):
         self.assertGreater(info.node_count,0)
         self.assertTrue(info.components)
         self.assertTrue(all(c['faces']>0 for c in info.components))
+        self.assertTrue(info.beam_components)
+        self.assertTrue(all(c['elements']>0 for c in info.beam_components))
+        self.assertTrue(info.truss_components)
+        self.assertTrue(all(c['elements']>0 for c in info.truss_components))
 
 
 if __name__=='__main__':unittest.main()

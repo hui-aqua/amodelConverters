@@ -9,6 +9,7 @@ Modular stages:
 """
 
 from __future__ import annotations
+from sim2blender.core.waves import wave_options
 
 import argparse
 from collections import defaultdict
@@ -23,7 +24,7 @@ from sim2blender.core.paths import PROJECT_ROOT
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from sim2blender.io.aquasim.model import DEFAULT_INPUT, read_model
+from sim2blender.io.aquasim.model import DEFAULT_INPUT, read_model, Model
 
 from sim2blender.io.aquasim.results import read_results, map_nodes
 from sim2blender.core.timeline import sample_frames, wave_timing
@@ -46,6 +47,8 @@ def build_unified_scene(config: dict) -> None:
     model_path = Path(model_raw).resolve()
     output_path = Path(output_raw).resolve()
     membrane_ids = [int(i) for i in config.get("membrane_ids", [])]
+    beam_ids = [int(i) for i in config["beam_ids"]] if config.get("beam_ids") is not None else None
+    truss_ids = [int(i) for i in config["truss_ids"]] if config.get("truss_ids") is not None else None
     cap_openings = bool(config.get("cap_openings", True))
     pin_top = bool(config.get("pin_top", True))
     base_frames = int(config.get("frames", 120))
@@ -72,10 +75,24 @@ def build_unified_scene(config: dict) -> None:
     # 1. Read AquaSim model and extract membrane geometry
     print(f"GUI_STAGE: Reading AquaSim model {model_path.name}…", flush=True)
     model = read_model(model_path)
-    membrane = [
-        c for c in model.cells
-        if c["component_tag"] == "membrane" and (not membrane_ids or c["component_id"] in membrane_ids)
-    ]
+    active_cells = []
+    for c in model.cells:
+        tag = c["component_tag"]
+        cid = c["component_id"]
+        if tag == "membrane":
+            if not membrane_ids or cid in membrane_ids:
+                active_cells.append(c)
+        elif tag == "beam":
+            if beam_ids is None or cid in beam_ids:
+                active_cells.append(c)
+        elif tag == "truss":
+            if truss_ids is None or cid in truss_ids:
+                active_cells.append(c)
+        else:
+            active_cells.append(c)
+    model = Model(model.nodes, active_cells)
+
+    membrane = [c for c in model.cells if c["component_tag"] == "membrane"]
     if not membrane:
         raise ValueError("No active membrane elements selected for enclosure.")
 
@@ -165,8 +182,10 @@ def build_unified_scene(config: dict) -> None:
                     pt.interpolation = "LINEAR"
 
         # Build passive members
-        geometry_report += build_members(model, collection, tags=("beam",))
-        rigid_beams(collection)
+        member_tags = tuple(t for t in ("beam", "truss") if any(c["component_tag"] == t for c in model.cells))
+        if member_tags:
+            geometry_report += build_members(model, collection, tags=member_tags)
+            rigid_beams(collection)
 
         scene["source_times"] = results.times
         scene["source_frames"] = replay_frames
@@ -207,8 +226,10 @@ def build_unified_scene(config: dict) -> None:
         cloth.point_cache.frame_end = base_frames
 
         constrain_axes(cage, nodes)
-        geometry_report += build_members(model, collection, tags=("beam",))
-        rigid_beams(collection)
+        member_tags = tuple(t for t in ("beam", "truss") if any(c["component_tag"] == t for c in model.cells))
+        if member_tags:
+            geometry_report += build_members(model, collection, tags=member_tags)
+            rigid_beams(collection)
 
         for node in model.nodes.values():
             if all(node.translate):
@@ -247,10 +268,11 @@ def build_unified_scene(config: dict) -> None:
                 "depth": depth,
                 "size": size,
                 "enable_volume": bool(env_dict.get("enable_volume", True)),
+                "resolution": 160 if env_dict.get("wave_type") == "jonswap" else 40,
             }
             for opt in ("surface_resolution", "ior", "roughness", "scatter_density", "absorption_density", "sun_energy", "sun_elevation_deg", "sun_rotation_deg"):
                 if opt in env_dict:
-                    water_kwargs[opt] = env_dict[opt]
+                    water_kwargs["resolution" if opt == "surface_resolution" else opt] = env_dict[opt]
 
             add_water(scene, collection=collection, **water_kwargs)
 
@@ -264,6 +286,7 @@ def build_unified_scene(config: dict) -> None:
                 wave_dir_deg=wave_dir,
                 water_level=level,
                 animate_water_surface=True,
+                **wave_options(env_dict),
                 setup_cloth_forces=True,
             )
 
@@ -282,7 +305,7 @@ def build_unified_scene(config: dict) -> None:
         from sim2blender.blender.feed import run_feed_animation
         feed_params = dict(feed_cfg) if feed_cfg else {}
         if use_env and isinstance(env_cfg, dict):
-            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m"):
+            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m", "wave_type", "jonswap_gamma", "wave_components", "wave_seed", "wave_spread_deg"):
                 if k in env_cfg and k not in feed_params:
                     feed_params[k] = env_cfg[k]
         run_feed_animation(feed_params)
@@ -297,7 +320,7 @@ def build_unified_scene(config: dict) -> None:
                 if k in schooling_cfg and k not in feeding_params:
                     feeding_params[k] = schooling_cfg[k]
         if use_env and isinstance(env_cfg, dict):
-            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m"):
+            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m", "wave_type", "jonswap_gamma", "wave_components", "wave_seed", "wave_spread_deg"):
                 if k in env_cfg and k not in feeding_params:
                     feeding_params[k] = env_cfg[k]
         run_fish_feeding_animation(feeding_params)
@@ -306,7 +329,7 @@ def build_unified_scene(config: dict) -> None:
         from sim2blender.blender.fish.school import run_fish_schooling
         schooling_params = dict(schooling_cfg) if schooling_cfg else {}
         if use_env and isinstance(env_cfg, dict):
-            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m"):
+            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m", "wave_type", "jonswap_gamma", "wave_components", "wave_seed", "wave_spread_deg"):
                 if k in env_cfg and k not in schooling_params:
                     schooling_params[k] = env_cfg[k]
         run_fish_schooling(schooling_params)
@@ -334,10 +357,11 @@ def build_unified_scene(config: dict) -> None:
             "depth": depth,
             "size": size,
             "enable_volume": bool(env_dict.get("enable_volume", True)),
+            "resolution": 160 if env_dict.get("wave_type") == "jonswap" else 40,
         }
         for opt in ("surface_resolution", "ior", "roughness", "scatter_density", "absorption_density", "sun_energy", "sun_elevation_deg", "sun_rotation_deg"):
             if opt in env_dict:
-                water_kwargs[opt] = env_dict[opt]
+                water_kwargs["resolution" if opt == "surface_resolution" else opt] = env_dict[opt]
 
         add_water(scene, collection=collection, **water_kwargs)
 
@@ -351,6 +375,7 @@ def build_unified_scene(config: dict) -> None:
             wave_dir_deg=wave_dir,
             water_level=level,
             animate_water_surface=True,
+            **wave_options(env_dict),
         )
 
     # 5. Cinematic Camera

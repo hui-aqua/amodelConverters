@@ -32,8 +32,72 @@ class EnvironmentTests(unittest.TestCase):
         other_scene = next((s for s in bpy.data.scenes if s != self.scene), None)
         if other_scene and hasattr(bpy.context, "window") and bpy.context.window:
             bpy.context.window.scene = other_scene
+        objects = list(self.scene.objects)
         if self.scene.name in bpy.data.scenes:
             bpy.data.scenes.remove(self.scene, do_unlink=True)
+        for obj in objects:
+            if not any(obj.name in scene.objects for scene in bpy.data.scenes):
+                bpy.data.objects.remove(obj, do_unlink=True)
+
+    def test_jonswap_surface_and_rebuild(self):
+        from sim2blender.core.waves import wave_options
+        surf = add_water(self.scene, level=2, size=20, resolution=8)["surface"]
+        self.scene.frame_start = 5
+        self.scene.frame_end = 8
+        set_wave_and_current(self.scene, wave_type="jonswap", wave_height=1.5,
+                             wave_period=6, water_level=2)
+        params = get_hydrodynamic_parameters(self.scene)
+        self.assertEqual(params["wave_type"], "jonswap")
+        keys = surf.data.shape_keys.key_blocks
+        self.assertEqual(len(keys), 5)
+        p = keys[1].data[0].co
+        expected = calculate_wave_elevation(p.x, p.y, 0, wave_height=1.5,
+                                            wave_period=6, water_level=2, **wave_options(params))
+        self.assertAlmostEqual(p.z, expected, places=5)
+        self.assertNotEqual(keys[1].data[0].co.z, keys[-1].data[0].co.z)
+        set_wave_and_current(self.scene, wave_height=0, water_level=2, setup_cloth_forces=False)
+        self.assertEqual(len(surf.data.shape_keys.key_blocks), 5)
+        self.assertAlmostEqual(surf.data.shape_keys.key_blocks[1].data[0].co.z, 2)
+
+    def test_environment_changes_fish_paths(self):
+        import bmesh
+        from sim2blender.blender.fish.school import run_fish_schooling
+        from sim2blender.blender.fish.feeding import run_fish_feeding_animation
+        mesh = bpy.data.meshes.new("Coupling cage")
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=100)
+        bm.to_mesh(mesh)
+        bm.free()
+        cage = bpy.data.objects.new("Membrane cage", mesh)
+        self.scene.collection.objects.link(cage)
+        self.scene.frame_end = 20
+
+        for run in (run_fish_schooling, run_fish_feeding_animation):
+            def sample(**overrides):
+                self.scene.frame_set(1)
+                cfg = dict(fish_count=3, random_seed=7, water_level_m=50,
+                           current_speed_m_s=0, wave_height_m=0)
+                cfg.update(overrides)
+                run(cfg)
+                self.scene.frame_set(20)
+                return [o.location.copy() for o in bpy.data.collections['Fish school'].objects]
+            still = sample()
+            current = sample(current_speed_m_s=0.8, current_direction_deg=90)
+            waves = sample(wave_height_m=2, wave_period_s=6, wave_type='jonswap')
+            self.assertGreater(max((a-b).length for a,b in zip(still,current)), 0.01)
+            self.assertGreater(max((a-b).length for a,b in zip(still,waves)), 0.00001)
+            if run == run_fish_schooling:
+                aligned = sample(current_speed_m_s=0.8, rheotaxis_weight=0.5)
+                unaligned = sample(current_speed_m_s=0.8, rheotaxis_weight=0)
+                self.assertGreater(max((a-b).length for a,b in zip(aligned,unaligned)), 0.01)
+
+    def test_jonswap_changes_pellet_path(self):
+        from sim2blender.blender.feed import compute_particle_trajectory
+        args = (Vector((0,0,-0.5)), Vector((1,0,0)), Vector((0,0,0)), Vector((0,0,0)))
+        still, _ = compute_particle_trajectory(*args, duration_s=2, wave_height=0)
+        waves, _ = compute_particle_trajectory(*args, duration_s=2, wave_height=2,
+                                               spectrum_options={'wave_type':'jonswap'})
+        self.assertGreater((still[-1]-waves[-1]).length, 0.01)
 
     def test_water_velocity_and_wave_elevation(self):
         # Current = 0.5 m/s along +X (0 deg), Wave = 1.0 m height, 5.0 s period

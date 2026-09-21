@@ -354,6 +354,8 @@ def run_fish_schooling(config: dict | None = None) -> None:
     wave_height = float(cfg.get("wave_height_m", cfg.get("wave_height", scene.get("wave_height_m", 0.0))))
     wave_period = float(cfg.get("wave_period_s", cfg.get("wave_period", scene.get("wave_period_s", 5.0))))
     wave_length = float(cfg.get("wave_length_m", cfg.get("wave_length", scene.get("wave_length_m", 30.0))))
+    from sim2blender.core.waves import wave_options
+    spectrum_options = wave_options({**wave_options(scene), **cfg})
     wave_dir_deg = float(cfg.get("wave_direction_deg", cfg.get("wave_dir_deg", scene.get("wave_direction_deg", 0.0))))
     water_level = float(cfg.get("water_level_m", cfg.get("water_level", scene.get("water_level_z", 0.0))))
     hydro_coupling = float(cfg.get("hydro_coupling", 0.35))
@@ -513,7 +515,6 @@ def run_fish_schooling(config: dict | None = None) -> None:
 
             # (G) Autonomous Swimming Step
             swim_speed = fish_cruise_speeds[i]
-            swim_step = limited_dir * (swim_speed / fps if frame > frame_start else 0.0)
 
             # (H) Ambient Hydrodynamic Coupling (Wave & Current)
             if (current_speed > 0.0 or wave_height > 0.0) and frame > frame_start:
@@ -526,6 +527,7 @@ def run_fish_schooling(config: dict | None = None) -> None:
                     wave_period=wave_period,
                     wave_length=wave_length,
                     wave_dir_deg=wave_dir_deg,
+                    **spectrum_options,
                     water_level=water_level,
                 )
                 water_step = (v_water / fps) * hydro_coupling
@@ -536,6 +538,7 @@ def run_fish_schooling(config: dict | None = None) -> None:
             else:
                 water_step = Vector((0.0, 0.0, 0.0))
 
+            swim_step = limited_dir * (swim_speed / fps if frame > frame_start else 0.0)
             total_step = swim_step + water_step
             step_length = total_step.length
             final_dir = total_step.normalized() if step_length > 1e-6 else limited_dir

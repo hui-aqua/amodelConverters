@@ -9,6 +9,7 @@ import math
 from typing import Sequence
 import bpy
 from mathutils import Vector
+from sim2blender.core.waves import jonswap_components, spectral_elevation, wave_options
 
 
 def calculate_water_velocity(
@@ -21,6 +22,11 @@ def calculate_water_velocity(
     wave_length: float = 30.0,
     wave_dir_deg: float = 0.0,
     water_level: float = 0.0,
+    wave_type: str = "regular",
+    jonswap_gamma: float = 3.3,
+    wave_components: int = 64,
+    wave_seed: int = 42,
+    wave_spread_deg: float = 20.0,
 ) -> Vector:
     """Calculate 3D water velocity vector at position (x, y, z) and time t."""
     if pos.z > water_level:
@@ -36,6 +42,17 @@ def calculate_water_velocity(
 
     if wave_height <= 0 or wave_period <= 0:
         return v_curr
+
+    if wave_type == "jonswap":
+        velocity = v_curr.copy()
+        for a, omega, kx, ky, offset in jonswap_components(wave_height, wave_period, wave_dir_deg, jonswap_gamma, wave_components, wave_seed, wave_spread_deg):
+            k = math.hypot(kx, ky)
+            phase = kx*pos.x + ky*pos.y - omega*t + offset
+            speed = a * omega * math.exp(k * min(0.0, pos.z-water_level))
+            velocity += Vector((speed*kx/k*math.cos(phase), speed*ky/k*math.cos(phase), speed*math.sin(phase)))
+        return velocity
+    if wave_type != "regular":
+        raise ValueError("Unknown wave model: " + wave_type)
 
     # Linear Airy wave orbital velocity kinematics
     wave_rad = math.radians(wave_dir_deg)
@@ -68,8 +85,17 @@ def calculate_wave_elevation(
     wave_length: float = 30.0,
     wave_dir_deg: float = 0.0,
     water_level: float = 0.0,
+    wave_type: str = "regular",
+    jonswap_gamma: float = 3.3,
+    wave_components: int = 64,
+    wave_seed: int = 42,
+    wave_spread_deg: float = 20.0,
 ) -> float:
     """Calculate wave surface height at (x, y) and time t."""
+    if wave_type == "jonswap":
+        return water_level + spectral_elevation(jonswap_components(wave_height, wave_period, wave_dir_deg, jonswap_gamma, wave_components, wave_seed, wave_spread_deg), x, y, t)
+    if wave_type != "regular":
+        raise ValueError("Unknown wave model: " + wave_type)
     if wave_height <= 0 or wave_period <= 0:
         return water_level
     wave_rad = math.radians(wave_dir_deg)
@@ -89,6 +115,11 @@ def setup_cloth_hydrodynamic_forces(
     collection=None,
     current_drag_scale: float = 12.0,
     wave_force_scale: float = 8.0,
+    wave_type: str = "regular",
+    jonswap_gamma: float = 3.3,
+    wave_components: int = 64,
+    wave_seed: int = 42,
+    wave_spread_deg: float = 20.0,
 ) -> dict:
     """Create or update Blender WIND force fields that act upon the cage cloth simulation.
 
@@ -164,10 +195,17 @@ def setup_cloth_hydrodynamic_forces(
     period = max(float(wave_period), 0.1)
     wave_amp = max(float(wave_height), 0.0) * float(wave_force_scale)
 
-    fcurve = wave_wind.field.driver_add("strength")
-    driver = fcurve.driver
-    driver.type = "SCRIPTED"
-    driver.expression = f"{wave_amp:.4f} * cos(2.0 * 3.14159265 * (frame - 1) / ({fps:.2f} * {period:.4f}))"
+    if wave_type == "jonswap":
+        components = jonswap_components(wave_height, wave_period, wave_dir_deg, jonswap_gamma, wave_components, wave_seed, wave_spread_deg)
+        for frame in range(scene.frame_start, scene.frame_end + 1):
+            t = (frame - scene.frame_start) / fps
+            wave_wind.field.strength = 2 * wave_force_scale * spectral_elevation(components, 0, 0, t)
+            wave_wind.field.keyframe_insert("strength", frame=frame)
+    else:
+        fcurve = wave_wind.field.driver_add("strength")
+        driver = fcurve.driver
+        driver.type = "SCRIPTED"
+        driver.expression = f"{wave_amp:.4f} * cos(2.0 * 3.14159265 * (frame - {scene.frame_start}) / ({fps:.2f} * {period:.4f}))"
 
     if collection and wave_wind.name not in collection.objects:
         collection.objects.link(wave_wind)
@@ -196,10 +234,23 @@ def set_wave_and_current(
     setup_cloth_forces: bool = True,
     current_drag_scale: float = 12.0,
     wave_force_scale: float = 8.0,
+    wave_type: str = "regular",
+    jonswap_gamma: float = 3.3,
+    wave_components: int = 64,
+    wave_seed: int = 42,
+    wave_spread_deg: float = 20.0,
 ) -> dict:
     """Configure wave and current hydrodynamic parameters in Blender scene."""
     if scene is None:
         scene = bpy.context.scene
+
+    if wave_type not in ("regular", "jonswap"):
+        raise ValueError("Unknown wave model: " + wave_type)
+    components = jonswap_components(wave_height, wave_period, wave_dir_deg, jonswap_gamma, wave_components, wave_seed, wave_spread_deg) if wave_type == "jonswap" else ()
+    options = dict(wave_type=wave_type, jonswap_gamma=jonswap_gamma,
+                   wave_components=wave_components, wave_seed=wave_seed, wave_spread_deg=wave_spread_deg)
+    for name, value in options.items():
+        scene[name] = value
 
     scene["current_speed_m_s"] = float(current_speed)
     scene["current_direction_deg"] = float(current_dir_deg)
@@ -221,34 +272,51 @@ def set_wave_and_current(
             wave_dir_deg=wave_dir_deg,
             current_drag_scale=current_drag_scale,
             wave_force_scale=wave_force_scale,
+            **options,
         )
 
     # Animate water surface plane vertices via Shape Keys if present
     surf_obj = scene.objects.get("Water surface")
-    if surf_obj and animate_water_surface and wave_height > 0:
+    if surf_obj and animate_water_surface:
         fps = scene.render.fps / scene.render.fps_base if scene.render.fps_base else scene.render.fps
         f_start = scene.frame_start
         f_end = scene.frame_end
         verts = surf_obj.data.vertices
         base_coords = [v.co.copy() for v in verts]
 
+        # Rebuilding or selecting flat water must remove the previous wave animation.
+        if surf_obj.data.shape_keys:
+            surf_obj.shape_key_clear()
         if not surf_obj.data.shape_keys:
             surf_obj.shape_key_add(name="Basis", from_mix=False)
+
+        if components:
+            import numpy as np
+            coordinates = np.array([tuple(p) for p in base_coords], dtype=np.float32)
+            # Cache spatial phases; evaluate all vertices with NumPy per component.
+            spatial = [(a, omega, kx*coordinates[:, 0] + ky*coordinates[:, 1] + offset)
+                       for a, omega, kx, ky, offset in components]
 
         for frame in range(f_start, f_end + 1):
             t = (frame - f_start) / max(fps, 1.0)
             key = surf_obj.shape_key_add(name=f"Wave_{frame:04d}", from_mix=False)
             key.interpolation = "KEY_LINEAR"
-            wave_coords = []
-            for p in base_coords:
-                eta = calculate_wave_elevation(
-                    p.x, p.y, t,
-                    wave_height=wave_height, wave_period=wave_period,
-                    wave_length=wave_length, wave_dir_deg=wave_dir_deg,
-                    water_level=water_level,
-                )
-                wave_coords.extend((p.x, p.y, eta))
-            key.data.foreach_set("co", wave_coords)
+            if components:
+                wave_coords = coordinates.copy()
+                wave_coords[:, 2] = water_level
+                for a, omega, phase in spatial:
+                    wave_coords[:, 2] += a * np.cos(phase - omega*t)
+                key.data.foreach_set("co", wave_coords.ravel())
+            else:
+                wave_coords = []
+                for p in base_coords:
+                    eta = calculate_wave_elevation(
+                        p.x, p.y, t, wave_height=wave_height, wave_period=wave_period,
+                        wave_length=wave_length, wave_dir_deg=wave_dir_deg,
+                        water_level=water_level,
+                    )
+                    wave_coords.extend((p.x, p.y, eta))
+                key.data.foreach_set("co", wave_coords)
 
         keys = surf_obj.data.shape_keys
         keys.use_relative = False
@@ -265,6 +333,7 @@ def set_wave_and_current(
                     pt.interpolation = "LINEAR"
 
     return {
+        **options,
         "current_speed": current_speed,
         "current_dir_deg": current_dir_deg,
         "wave_height": wave_height,
@@ -280,6 +349,7 @@ def get_hydrodynamic_parameters(scene=None) -> dict:
     if scene is None:
         scene = bpy.context.scene
     return {
+        **wave_options(scene),
         "current_speed": float(scene.get("current_speed_m_s", 0.0)),
         "current_dir_deg": float(scene.get("current_direction_deg", 0.0)),
         "wave_height": float(scene.get("wave_height_m", 0.0)),

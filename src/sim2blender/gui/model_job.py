@@ -1,6 +1,6 @@
 """Qt-independent model inspection, executable discovery and job validation."""
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import math
 import os
@@ -16,6 +16,8 @@ class ModelInfo:
     node_count: int
     components: list
     edges: dict
+    beam_components: list = field(default_factory=list)
+    truss_components: list = field(default_factory=list)
 
     def junctions(self, selected):
         selected=set(selected)
@@ -28,15 +30,31 @@ def inspect_model(path):
     model=read_model(path)
     groups={}
     edges=defaultdict(list)
+    beam_groups={}
+    truss_groups={}
     for cell in model.cells:
-        if cell['component_tag']!='membrane':
-            continue
+        tag=cell['component_tag']
         cid=cell['component_id']
-        group=groups.setdefault(cid,dict(id=cid,name=cell['component_name'],faces=0))
-        group['faces']+=1
-        nodes=cell['nodes']
-        for a,b in zip(nodes,nodes[1:]+nodes[:1]):edges[tuple(sorted((a,b)))].append(cid)
-    return ModelInfo(path,len(model.nodes),[groups[cid] for cid in sorted(groups)],dict(edges))
+        name=cell['component_name']
+        if tag=='membrane':
+            group=groups.setdefault(cid,dict(id=cid,name=name,faces=0))
+            group['faces']+=1
+            nodes=cell['nodes']
+            for a,b in zip(nodes,nodes[1:]+nodes[:1]):edges[tuple(sorted((a,b)))].append(cid)
+        elif tag=='beam':
+            b_group=beam_groups.setdefault(cid,dict(id=cid,name=name,elements=0))
+            b_group['elements']+=1
+        elif tag=='truss':
+            t_group=truss_groups.setdefault(cid,dict(id=cid,name=name,elements=0))
+            t_group['elements']+=1
+    return ModelInfo(
+        path,
+        len(model.nodes),
+        [groups[cid] for cid in sorted(groups)],
+        dict(edges),
+        beam_components=[beam_groups[cid] for cid in sorted(beam_groups)],
+        truss_components=[truss_groups[cid] for cid in sorted(truss_groups)],
+    )
 
 
 def find_blender():
@@ -64,6 +82,8 @@ class ModelJob:
     seed: int=7
     cap_openings: bool=True
     pin_top: bool=True
+    beam_ids: list | None=None
+    truss_ids: list | None=None
 
     def command(self):
         if not self.blender.is_file():raise ValueError('Choose the Blender executable in Advanced settings.')
@@ -125,6 +145,8 @@ class PipelineJob:
     model: Path
     output: Path
     membrane_ids: list
+    beam_ids: list | None = None
+    truss_ids: list | None = None
     cap_openings: bool = True
     pin_top: bool = True
     frames: int = 120
@@ -158,6 +180,8 @@ class PipelineJob:
             'model': str(self.model.resolve()),
             'output': str(self.output.resolve()),
             'membrane_ids': self.membrane_ids,
+            'beam_ids': self.beam_ids,
+            'truss_ids': self.truss_ids,
             'cap_openings': self.cap_openings,
             'pin_top': self.pin_top,
             'frames': self.frames,

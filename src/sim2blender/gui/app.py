@@ -156,6 +156,63 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.warning.setObjectName('Warning')
         e.addWidget(self.warning)
 
+        # Advanced / Hidden options for Beam and Truss element selection
+        self.beam_truss_toggle = QPushButton('Beam & truss elements (advanced) ▸')
+        self.beam_truss_toggle.setCheckable(True)
+        self.beam_truss_toggle.setStyleSheet('text-align: left; padding: 4px 8px; font-weight: 500; font-size: 11px;')
+        e.addWidget(self.beam_truss_toggle)
+
+        self.beam_truss_container = QWidget()
+        btc_layout = QVBoxLayout(self.beam_truss_container)
+        btc_layout.setContentsMargins(0, 4, 0, 4)
+        btc_layout.setSpacing(6)
+
+        # Beam element selection
+        beam_header = QHBoxLayout()
+        beam_lbl = QLabel('Beam elements:')
+        beam_lbl.setStyleSheet('font-weight: 600; font-size: 11px; color: #123e50;')
+        beam_header.addWidget(beam_lbl)
+        beam_header.addStretch()
+        btn_beam_all = QPushButton('All')
+        btn_beam_all.setStyleSheet('padding: 1px 6px; font-size: 10px;')
+        btn_beam_all.clicked.connect(self.select_all_beams)
+        beam_header.addWidget(btn_beam_all)
+        btn_beam_none = QPushButton('None')
+        btn_beam_none.setStyleSheet('padding: 1px 6px; font-size: 10px;')
+        btn_beam_none.clicked.connect(self.select_no_beams)
+        beam_header.addWidget(btn_beam_none)
+        btc_layout.addLayout(beam_header)
+
+        self.beam_components = QListWidget()
+        self.beam_components.setFixedHeight(85)
+        self.beam_components.itemChanged.connect(self.selection_changed)
+        btc_layout.addWidget(self.beam_components)
+
+        # Truss element selection
+        truss_header = QHBoxLayout()
+        truss_lbl = QLabel('Truss elements:')
+        truss_lbl.setStyleSheet('font-weight: 600; font-size: 11px; color: #123e50;')
+        truss_header.addWidget(truss_lbl)
+        truss_header.addStretch()
+        btn_truss_all = QPushButton('All')
+        btn_truss_all.setStyleSheet('padding: 1px 6px; font-size: 10px;')
+        btn_truss_all.clicked.connect(self.select_all_trusses)
+        truss_header.addWidget(btn_truss_all)
+        btn_truss_none = QPushButton('None')
+        btn_truss_none.setStyleSheet('padding: 1px 6px; font-size: 10px;')
+        btn_truss_none.clicked.connect(self.select_no_trusses)
+        truss_header.addWidget(btn_truss_none)
+        btc_layout.addLayout(truss_header)
+
+        self.truss_components = QListWidget()
+        self.truss_components.setFixedHeight(85)
+        self.truss_components.itemChanged.connect(self.selection_changed)
+        btc_layout.addWidget(self.truss_components)
+
+        self.beam_truss_container.setVisible(False)
+        self.beam_truss_toggle.toggled.connect(self._toggle_beam_truss)
+        e.addWidget(self.beam_truss_container)
+
         self.caps = QCheckBox('Close planar openings (virtual caps)')
         self.caps.setChecked(True)
         self.caps.setToolTip('Adds invisible containment caps; does not add physical net material.')
@@ -536,11 +593,71 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         if path:
             self.blender.setText(path)
 
+    def _toggle_beam_truss(self, checked: bool):
+        self.beam_truss_container.setVisible(checked)
+        self._update_beam_truss_toggle_text()
+
+    def _update_beam_truss_toggle_text(self):
+        arrow = '▾' if self.beam_truss_toggle.isChecked() else '▸'
+        b_sel = len(self.selected_beam_ids())
+        b_tot = self.beam_components.count()
+        t_sel = len(self.selected_truss_ids())
+        t_tot = self.truss_components.count()
+        if b_tot or t_tot:
+            self.beam_truss_toggle.setText(f'Beam & truss elements ({b_sel}/{b_tot} beams, {t_sel}/{t_tot} trusses) {arrow}')
+        else:
+            self.beam_truss_toggle.setText(f'Beam & truss elements (advanced) {arrow}')
+
+    def selected_beam_ids(self):
+        return [
+            self.beam_components.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.beam_components.count())
+            if self.beam_components.item(i).checkState() == Qt.CheckState.Checked
+        ]
+
+    def selected_truss_ids(self):
+        return [
+            self.truss_components.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.truss_components.count())
+            if self.truss_components.item(i).checkState() == Qt.CheckState.Checked
+        ]
+
+    def select_all_beams(self):
+        self.beam_components.blockSignals(True)
+        for i in range(self.beam_components.count()):
+            self.beam_components.item(i).setCheckState(Qt.CheckState.Checked)
+        self.beam_components.blockSignals(False)
+        self.selection_changed()
+
+    def select_no_beams(self):
+        self.beam_components.blockSignals(True)
+        for i in range(self.beam_components.count()):
+            self.beam_components.item(i).setCheckState(Qt.CheckState.Unchecked)
+        self.beam_components.blockSignals(False)
+        self.selection_changed()
+
+    def select_all_trusses(self):
+        self.truss_components.blockSignals(True)
+        for i in range(self.truss_components.count()):
+            self.truss_components.item(i).setCheckState(Qt.CheckState.Checked)
+        self.truss_components.blockSignals(False)
+        self.selection_changed()
+
+    def select_no_trusses(self):
+        self.truss_components.blockSignals(True)
+        for i in range(self.truss_components.count()):
+            self.truss_components.item(i).setCheckState(Qt.CheckState.Unchecked)
+        self.truss_components.blockSignals(False)
+        self.selection_changed()
+
     def model_changed(self):
         self.token += 1
         self.info = None
         self.components.clear()
+        self.beam_components.clear()
+        self.truss_components.clear()
         self.warning.clear()
+        self._update_beam_truss_toggle_text()
         self.build_button.setEnabled(False)
         self.model_summary.setText('Waiting to inspect model…')
         self.load_timer.start()
@@ -566,7 +683,13 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             self.model_summary.setText('Could not read model: ' + error)
             return
         self.info = info
-        self.model_summary.setText(f'{info.node_count:,} active nodes · {len(info.components)} membrane components')
+        b_count = len(getattr(info, 'beam_components', []))
+        t_count = len(getattr(info, 'truss_components', []))
+        self.model_summary.setText(
+            f'{info.node_count:,} active nodes · {len(info.components)} membrane'
+            + (f' · {b_count} beam' if b_count else '')
+            + (f' · {t_count} truss' if t_count else '')
+        )
         self.components.blockSignals(True)
         self.components.clear()
         key = 'membranes/' + hashlib.sha256(str(info.path).encode()).hexdigest()
@@ -579,6 +702,36 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             item.setCheckState(Qt.CheckState.Checked if checked is None or str(comp['id']) in checked else Qt.CheckState.Unchecked)
             self.components.addItem(item)
         self.components.blockSignals(False)
+
+        # Beam components (selected by default)
+        self.beam_components.blockSignals(True)
+        self.beam_components.clear()
+        beam_key = 'beams/' + hashlib.sha256(str(info.path).encode()).hexdigest()
+        saved_beams = self.settings.value(beam_key, None)
+        checked_beams = {str(cid) for cid in saved_beams} if isinstance(saved_beams, list) else None
+        for comp in getattr(info, 'beam_components', []):
+            item = QListWidgetItem(f'{comp["id"]}  ·  {comp["name"]}  ({comp["elements"]:,} elements)')
+            item.setData(Qt.ItemDataRole.UserRole, comp['id'])
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if checked_beams is None or str(comp['id']) in checked_beams else Qt.CheckState.Unchecked)
+            self.beam_components.addItem(item)
+        self.beam_components.blockSignals(False)
+
+        # Truss components (selected by default)
+        self.truss_components.blockSignals(True)
+        self.truss_components.clear()
+        truss_key = 'trusses/' + hashlib.sha256(str(info.path).encode()).hexdigest()
+        saved_trusses = self.settings.value(truss_key, None)
+        checked_trusses = {str(cid) for cid in saved_trusses} if isinstance(saved_trusses, list) else None
+        for comp in getattr(info, 'truss_components', []):
+            item = QListWidgetItem(f'{comp["id"]}  ·  {comp["name"]}  ({comp["elements"]:,} elements)')
+            item.setData(Qt.ItemDataRole.UserRole, comp['id'])
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if checked_trusses is None or str(comp['id']) in checked_trusses else Qt.CheckState.Unchecked)
+            self.truss_components.addItem(item)
+        self.truss_components.blockSignals(False)
+
+        self._update_beam_truss_toggle_text()
         self.output.clear()
         self.suggest_output()
         self.settings.setValue('model', str(info.path))
@@ -596,9 +749,16 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
 
     def selection_changed(self):
         ids = self.selected_ids()
+        beam_ids = self.selected_beam_ids()
+        truss_ids = self.selected_truss_ids()
         if self.info:
             key = 'membranes/' + hashlib.sha256(str(self.info.path).encode()).hexdigest()
             self.settings.setValue(key, [str(cid) for cid in ids])
+            beam_key = 'beams/' + hashlib.sha256(str(self.info.path).encode()).hexdigest()
+            self.settings.setValue(beam_key, [str(cid) for cid in beam_ids])
+            truss_key = 'trusses/' + hashlib.sha256(str(self.info.path).encode()).hexdigest()
+            self.settings.setValue(truss_key, [str(cid) for cid in truss_ids])
+        self._update_beam_truss_toggle_text()
         conflicts, involved = self.info.junctions(ids) if self.info else (0, [])
         if conflicts:
             self.warning.setText(
@@ -662,6 +822,11 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.env_water_depth.setValue(self.settings.value('env_water_depth', 100.0, type=float))
         self.env_water_size.setValue(self.settings.value('env_water_size', 300.0, type=float))
         self.env_enable_volume.setChecked(self.settings.value('env_enable_volume', True, type=bool))
+        self.env_wave_type.setCurrentIndex(max(0, self.env_wave_type.findData(self.settings.value('env_wave_type', 'regular'))))
+        self.env_jonswap_gamma.setValue(self.settings.value('env_jonswap_gamma', 3.3, type=float))
+        self.env_wave_components.setValue(self.settings.value('env_wave_components', 64, type=int))
+        self.env_wave_seed.setValue(self.settings.value('env_wave_seed', 42, type=int))
+        self.env_wave_spread_deg.setValue(self.settings.value('env_wave_spread_deg', 20.0, type=float))
         self.env_wave_height.setValue(self.settings.value('env_wave_height', 0.30, type=float))
         self.env_wave_period.setValue(self.settings.value('env_wave_period', 6.0, type=float))
         self.env_wave_length.setValue(self.settings.value('env_wave_length', 25.0, type=float))
@@ -761,6 +926,11 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.settings.setValue('env_water_depth', self.env_water_depth.value())
         self.settings.setValue('env_water_size', self.env_water_size.value())
         self.settings.setValue('env_enable_volume', self.env_enable_volume.isChecked())
+        self.settings.setValue('env_wave_type', self.env_wave_type.currentData())
+        self.settings.setValue('env_jonswap_gamma', self.env_jonswap_gamma.value())
+        self.settings.setValue('env_wave_components', self.env_wave_components.value())
+        self.settings.setValue('env_wave_seed', self.env_wave_seed.value())
+        self.settings.setValue('env_wave_spread_deg', self.env_wave_spread_deg.value())
         self.settings.setValue('env_wave_height', self.env_wave_height.value())
         self.settings.setValue('env_wave_period', self.env_wave_period.value())
         self.settings.setValue('env_wave_length', self.env_wave_length.value())
@@ -864,6 +1034,11 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'enable_volume': self.env_enable_volume.isChecked(),
                     'current_speed_m_s': self.env_current_speed.value(),
                     'current_direction_deg': self.env_current_dir.value(),
+                    'wave_type': self.env_wave_type.currentData(),
+                    'jonswap_gamma': self.env_jonswap_gamma.value(),
+                    'wave_components': self.env_wave_components.value(),
+                    'wave_seed': self.env_wave_seed.value(),
+                    'wave_spread_deg': self.env_wave_spread_deg.value(),
                     'wave_height_m': self.env_wave_height.value(),
                     'wave_period_s': self.env_wave_period.value(),
                     'wave_length_m': self.env_wave_length.value(),
@@ -979,6 +1154,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                 model=self.info.path,
                 output=Path(self.output.text().strip()),
                 membrane_ids=self.selected_ids(),
+                beam_ids=self.selected_beam_ids(),
+                truss_ids=self.selected_truss_ids(),
                 cap_openings=self.caps.isChecked(),
                 pin_top=self.pins.isChecked(),
                 frames=self.frames.value(),

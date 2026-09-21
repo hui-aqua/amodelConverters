@@ -19,6 +19,7 @@ from mathutils import Vector, Quaternion
 
 from sim2blender.blender.enclosure import Enclosure, boundary_caps, stitch_membrane_seams
 from sim2blender.blender.fish.salmon import salmon_mesh
+from sim2blender.blender.fish.school import project_inside_enclosure
 
 FISH_COUNT = 1000
 FISH_LENGTH_MEAN_M = 0.775
@@ -271,10 +272,8 @@ def run_fish_feeding_animation(config: dict | None = None) -> None:
             if enclosure.contains(p, clearance_i + step_length) and enclosure.contains(target_p, clearance_i):
                 p = target_p
             else:
-                direction = (cage_center - p).normalized()
-                target_p = p + direction * (step_length * 0.5)
-                if enclosure.contains(target_p, clearance_i):
-                    p = target_p
+                p = project_inside_enclosure(target_p, clearance_i, enclosure, cage_center)
+                direction = (p - positions[i]).normalized() if (p - positions[i]).length > 1e-6 else v
 
             positions[i] = p
             velocities[i] = direction

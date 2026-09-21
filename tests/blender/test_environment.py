@@ -118,6 +118,59 @@ class EnvironmentTests(unittest.TestCase):
         self.assertIsNotNone(fish_obj.animation_data)
         self.assertIsNotNone(fish_obj.animation_data.action)
 
+    def test_fish_population_strictly_constant_and_continuous(self):
+        """Verify that fish count remains strictly constant across all frames without birth, death, or teleportation."""
+        import bmesh
+        from sim2blender.blender.fish.school import run_fish_schooling
+
+        cage_obj = self.scene.objects.get("Membrane cage")
+        if not cage_obj:
+            mesh = bpy.data.meshes.new("Membrane cage")
+            bm = bmesh.new()
+            bmesh.ops.create_cube(bm, size=20.0)
+            bm.to_mesh(mesh)
+            bm.free()
+            cage_obj = bpy.data.objects.new("Membrane cage", mesh)
+            self.scene.collection.objects.link(cage_obj)
+
+        self.scene.frame_start = 1
+        self.scene.frame_end = 20
+
+        count = 12
+        cfg = {
+            "fish_count": count,
+            "swim_speed_bl_s": 0.85,
+            "wall_detection_dist_m": 1.5,
+            "max_turn_rate_deg_s": 120.0,
+        }
+        run_fish_schooling(cfg)
+
+        school = bpy.data.collections.get("Fish school")
+        self.assertIsNotNone(school)
+        self.assertEqual(len(school.objects), count, "Initial fish count must match configured count")
+
+        fish_list = sorted(list(school.objects), key=lambda o: o.name)
+        prev_positions = {}
+
+        # Verify every frame preserves exact fish count and continuous motion
+        for frame in range(self.scene.frame_start, self.scene.frame_end + 1):
+            self.scene.frame_set(frame)
+            active_fish = [o for o in school.objects if not o.hide_viewport]
+            self.assertEqual(len(active_fish), count, f"Frame {frame} must have exactly {count} fish (no birth or death)")
+
+            for fish in fish_list:
+                curr_loc = fish.matrix_world.translation.copy()
+                if frame > self.scene.frame_start:
+                    prev_loc = prev_positions[fish.name]
+                    step_dist = (curr_loc - prev_loc).length
+                    # Velocity is ~ 0.85 BL/s * 0.775 m / 24 fps ≈ 0.03 m/frame.
+                    # A teleportation would jump > 3 meters across the cage.
+                    self.assertLess(
+                        step_dist, 2.0,
+                        f"Fish {fish.name} teleported at frame {frame} (moved {step_dist:.2f}m in a single frame!)"
+                    )
+                prev_positions[fish.name] = curr_loc
+
     def test_cloth_physics_under_wave_and_current(self):
         # 1. Configure wave and current with cloth forces
         set_wave_and_current(

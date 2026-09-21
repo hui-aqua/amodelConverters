@@ -686,12 +686,24 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.fish_length_mean.setValue(self.settings.value('fish_length_mean', 0.775, type=float))
         self.fish_length_std.setValue(self.settings.value('fish_length_std', 0.05, type=float))
         self.fish_nominal_weight.setValue(self.settings.value('fish_nominal_weight', 5.0, type=float))
-        self.fish_cruise_speed.setValue(self.settings.value('fish_cruise_speed', 0.85, type=float))
-        self.fish_seed.setValue(self.settings.value('fish_seed', 7, type=int))
-        self.fish_wall_buffer.setValue(self.settings.value('fish_wall_buffer', 0.1, type=float))
+        self.fish_separation_weight.setValue(self.settings.value('fish_separation_weight', 0.35, type=float))
+        self.fish_separation_radius.setValue(self.settings.value('fish_separation_radius', 1.2, type=float))
+        self.fish_alignment_weight.setValue(self.settings.value('fish_alignment_weight', 0.25, type=float))
+        self.fish_neighbor_radius.setValue(self.settings.value('fish_neighbor_radius', 2.5, type=float))
+        self.fish_school_cohesion.setValue(self.settings.value('fish_school_cohesion', 0.15, type=float))
+        self.fish_milling_weight.setValue(self.settings.value('fish_milling_weight', 0.45, type=float))
         self.fish_cohesion.setValue(self.settings.value('fish_cohesion', 0.08, type=float))
-        self.fish_flow_direction.setCurrentIndex(self.settings.value('fish_flow_direction', 0, type=int))
+        self.fish_depth_min.setValue(self.settings.value('fish_depth_min', -12.0, type=float))
+        self.fish_depth_max.setValue(self.settings.value('fish_depth_max', -2.5, type=float))
+        self.fish_depth_weight.setValue(self.settings.value('fish_depth_weight', 0.25, type=float))
         self.fish_vert_osc.setValue(self.settings.value('fish_vert_osc', 0.35, type=float))
+        self.fish_flow_direction.setCurrentIndex(self.settings.value('fish_flow_direction', 0, type=int))
+        self.fish_cruise_speed.setValue(self.settings.value('fish_cruise_speed', 0.85, type=float))
+        self.fish_wall_detection.setValue(self.settings.value('fish_wall_detection', 1.5, type=float))
+        self.fish_wall_avoidance.setValue(self.settings.value('fish_wall_avoidance', 0.75, type=float))
+        self.fish_wall_buffer.setValue(self.settings.value('fish_wall_buffer', 0.05, type=float))
+        self.fish_max_turn_rate.setValue(self.settings.value('fish_max_turn_rate', 120.0, type=float))
+        self.fish_seed.setValue(self.settings.value('fish_seed', 7, type=int))
 
         # Feed
         self.opt_feed.setChecked(self.settings.value('opt_feed', False, type=bool))
@@ -771,12 +783,24 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.settings.setValue('fish_length_mean', self.fish_length_mean.value())
         self.settings.setValue('fish_length_std', self.fish_length_std.value())
         self.settings.setValue('fish_nominal_weight', self.fish_nominal_weight.value())
-        self.settings.setValue('fish_cruise_speed', self.fish_cruise_speed.value())
-        self.settings.setValue('fish_seed', self.fish_seed.value())
-        self.settings.setValue('fish_wall_buffer', self.fish_wall_buffer.value())
+        self.settings.setValue('fish_separation_weight', self.fish_separation_weight.value())
+        self.settings.setValue('fish_separation_radius', self.fish_separation_radius.value())
+        self.settings.setValue('fish_alignment_weight', self.fish_alignment_weight.value())
+        self.settings.setValue('fish_neighbor_radius', self.fish_neighbor_radius.value())
+        self.settings.setValue('fish_school_cohesion', self.fish_school_cohesion.value())
+        self.settings.setValue('fish_milling_weight', self.fish_milling_weight.value())
         self.settings.setValue('fish_cohesion', self.fish_cohesion.value())
-        self.settings.setValue('fish_flow_direction', self.fish_flow_direction.currentIndex())
+        self.settings.setValue('fish_depth_min', self.fish_depth_min.value())
+        self.settings.setValue('fish_depth_max', self.fish_depth_max.value())
+        self.settings.setValue('fish_depth_weight', self.fish_depth_weight.value())
         self.settings.setValue('fish_vert_osc', self.fish_vert_osc.value())
+        self.settings.setValue('fish_flow_direction', self.fish_flow_direction.currentIndex())
+        self.settings.setValue('fish_cruise_speed', self.fish_cruise_speed.value())
+        self.settings.setValue('fish_wall_detection', self.fish_wall_detection.value())
+        self.settings.setValue('fish_wall_avoidance', self.fish_wall_avoidance.value())
+        self.settings.setValue('fish_wall_buffer', self.fish_wall_buffer.value())
+        self.settings.setValue('fish_max_turn_rate', self.fish_max_turn_rate.value())
+        self.settings.setValue('fish_seed', self.fish_seed.value())
 
         self.settings.setValue('opt_feed', self.opt_feed.isChecked())
         self.settings.setValue('spreader_move', self.spreader_move_edit.text())
@@ -873,10 +897,23 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'nominal_weight_kg': self.fish_nominal_weight.value(),
                     'swim_speed_bl_s': self.fish_cruise_speed.value(),
                     'random_seed': self.fish_seed.value(),
-                    'wall_buffer_m': self.fish_wall_buffer.value(),
+                    'separation_weight': self.fish_separation_weight.value(),
+                    'separation_radius_m': self.fish_separation_radius.value(),
+                    'alignment_weight': self.fish_alignment_weight.value(),
+                    'neighbor_radius_m': self.fish_neighbor_radius.value(),
+                    'school_cohesion_weight': self.fish_school_cohesion.value(),
+                    'milling_weight': self.fish_milling_weight.value(),
                     'cohesion_weight': self.fish_cohesion.value(),
+                    'cage_cohesion_weight': self.fish_cohesion.value(),
                     'flow_direction': flow_dir_val,
+                    'preferred_depth_min_m': self.fish_depth_min.value(),
+                    'preferred_depth_max_m': self.fish_depth_max.value(),
+                    'depth_weight': self.fish_depth_weight.value(),
                     'vertical_oscillation_m': self.fish_vert_osc.value(),
+                    'wall_detection_dist_m': self.fish_wall_detection.value(),
+                    'wall_avoidance_weight': self.fish_wall_avoidance.value(),
+                    'wall_buffer_m': self.fish_wall_buffer.value(),
+                    'max_turn_rate_deg_s': self.fish_max_turn_rate.value(),
                 }
 
             feed_dict = None

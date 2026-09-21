@@ -4,6 +4,10 @@
 
 ## Launch
 
+On Linux, run `sh "Start Sim2Blender.sh"` from the repository root. See the
+[Linux setup guide](linux.md) for prerequisites and command-line usage.
+
+
 On Windows, double-click **Start Sim2Blender.cmd** in the repository root. The launcher in `launchers/gui/` creates a local `.venv` and installs PySide6 on first use; internet is required for that installation. It can use the standard Blender 5.2 installation's bundled Python. Later launches require no commands or dependency installation.
 
 With your own Python 3.11+ environment, including macOS/Linux:

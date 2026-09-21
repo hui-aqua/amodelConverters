@@ -6,7 +6,7 @@ Turn AquaSim models and exported motion into Blender scenes with animated salmon
 
 | Interface | Start here | Best for |
 |---|---|---|
-| **Desktop GUI** | Double-click **Start Sim2Blender.cmd** | Selecting files, reviewing timing, and building without terminal commands |
+| **Desktop GUI** | Windows: **Start Sim2Blender.cmd**; Linux: `sh "Start Sim2Blender.sh"` | Selecting files, reviewing timing, and building without terminal commands |
 | **Command line** | `launchers/cli/run_workflow.py` through Blender | Repeatable commands, batch jobs, and automation |
 
 Both interfaces use the same workflows and rendering code. Choose the interface you prefer, then choose the type of scene:
@@ -30,6 +30,13 @@ Tested with **Blender 5.2**. Salmon default to **77.5 cm**, with **nominal 5 kg*
 The first Windows launch installs PySide6 into a local `.venv` and needs internet. It can use Blender's bundled Python; subsequent launches require no commands. Blender is detected automatically, with its path available under **Advanced settings**. Close and reopen an existing GUI after updating the code.
 
 **[Full GUI instructions](docs/guides/gui.md)** include setup on other platforms, saved settings, output logs and troubleshooting.
+
+### Linux
+
+Run `sh "Start Sim2Blender.sh"` from the repository root with Python 3.11+ installed.
+See the [Linux setup guide](docs/guides/linux.md) for Blender discovery, desktop
+dependencies, command-line examples, and verification commands. Linux compatibility
+paths have regression tests; native Linux Blender execution has not yet been verified.
 
 ## Option B: command line
 

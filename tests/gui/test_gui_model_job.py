@@ -3,18 +3,58 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+import os
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
-from sim2blender.gui.model_job import ModelJob, ReplayJob, PipelineJob, ModelInfo, inspect_model
+from sim2blender.gui.model_job import ModelJob, ReplayJob, PipelineJob, ModelInfo, inspect_model, find_blender, validate_blender
 
 
 class ModelJobTests(unittest.TestCase):
+    def test_linux_discovery_and_execute_permission(self):
+        with tempfile.TemporaryDirectory(prefix='Linux Blender ') as folder:
+            exe = Path(folder) / 'blender'
+            exe.touch()
+            with patch('sim2blender.gui.model_job.sys.platform', 'linux'), \
+                 patch.dict(os.environ, {'BLENDER_PATH': str(exe)}), \
+                 patch('sim2blender.gui.model_job.os.access', return_value=True):
+                self.assertEqual(find_blender(), str(exe.absolute()))
+                self.assertEqual(validate_blender(exe), str(exe.absolute()))
+            with patch('sim2blender.gui.model_job.sys.platform', 'linux'), \
+                 patch('sim2blender.gui.model_job.os.access', return_value=False):
+                with self.assertRaisesRegex(ValueError, 'not executable'):
+                    validate_blender(exe)
+
+    def test_linux_snap_launcher_is_not_dereferenced(self):
+        # Snap dispatches using argv[0]; resolving this to /usr/bin/snap breaks it.
+        with patch('sim2blender.gui.model_job.sys.platform', 'linux'), \
+             patch.dict(os.environ, {'BLENDER_PATH': ''}), \
+             patch('sim2blender.gui.model_job.shutil.which', return_value='/snap/bin/blender'), \
+             patch('sim2blender.gui.model_job.is_executable', return_value=True), \
+             patch.object(Path, 'resolve', side_effect=AssertionError('Do not dereference executable')):
+            self.assertEqual(find_blender(), str(Path('/snap/bin/blender').absolute()))
+
+    def test_extensionless_executable_and_spaces(self):
+        with tempfile.TemporaryDirectory(prefix='Linux paths ') as folder:
+            base = Path(folder)
+            exe = base / 'blender'
+            exe.touch()
+            exe.chmod(0o755)
+            model = base / 'my cage.amodel'
+            model.touch()
+            for job in (ModelJob(exe, model, base/'scene.blend', [1]),
+                        PipelineJob(exe, model, base/'scene.blend', [1])):
+                with patch('sim2blender.gui.model_job.sys.platform', 'linux'):
+                    program, args = job.command()
+                self.assertEqual(program, str(exe.absolute()))
+                self.assertIn('--background', args)
+
     def test_pipeline_job_command(self):
         with tempfile.TemporaryDirectory(prefix='Pipeline paths ') as folder:
             base = Path(folder)
             model = base / 'cage.amodel'
             model.touch()
             exe = base / 'blender.exe'
-            exe.touch()
+            exe.touch();exe.chmod(0o755)
             output = base / 'test_scene.blend'
             job = PipelineJob(
                 blender=exe,
@@ -47,7 +87,7 @@ class ModelJobTests(unittest.TestCase):
             base=Path(folder)
             model=base/'my cage.amodel';model.touch()
             results=base/'out & motion.txt';results.touch()
-            exe=base/'blender.exe';exe.touch()
+            exe=base/'blender.exe';exe.touch();exe.chmod(0o755)
             job=ReplayJob(exe,model,base/'replay.blend',[3,4],results=results,fps=30,step_seconds=.2)
             _,args=job.command()
             self.assertIn(str(results),args)
@@ -69,7 +109,7 @@ class ModelJobTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='GUI paths ') as folder:
             base=Path(folder)
             model=base/'square cage & fish.amodel';model.touch()
-            exe=base/'blender.exe';exe.touch()
+            exe=base/'blender.exe';exe.touch();exe.chmod(0o755)
             output=base/'salmon cage.blend'
             program,args=ModelJob(exe,model,output,[3,4]).command()
             self.assertEqual(program,str(exe))

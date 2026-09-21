@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
     QPushButton, QScrollArea, QSpinBox, QSplitter, QTabWidget, QVBoxLayout, QWidget)
 
 from sim2blender.core.paths import PROJECT_ROOT
-from sim2blender.gui.model_job import PipelineJob, find_blender, inspect_model
+from sim2blender.gui.model_job import PipelineJob, find_blender, inspect_model, executable_path
 from sim2blender.io.aquasim.results import inspect_results
 from sim2blender.core.timeline import wave_timing
 
@@ -588,7 +588,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         path, _ = QFileDialog.getOpenFileName(
             self, 'Select Blender executable',
             self.blender.text(),
-            'Executables (*.exe);;All files (*)'
+            'Executables (*.exe);;All files (*)' if sys.platform == 'win32' else 'All files (*)'
         )
         if path:
             self.blender.setText(path)
@@ -1260,7 +1260,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.progress.setValue(100 if success else 0)
         if success:
             self.last_output = self.job.output.resolve()
-            self.last_blender = self.job.blender.resolve()
+            self.last_blender = executable_path(self.job.blender)
             self.status.setText('Scene ready. Open it in Blender to view and play.')
         elif self.cancelled:
             self.status.setText('Build cancelled.')

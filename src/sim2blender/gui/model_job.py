@@ -6,6 +6,7 @@ import math
 import os
 import re
 import shutil
+import sys
 
 from sim2blender.io.aquasim.model import read_model
 
@@ -57,16 +58,43 @@ def inspect_model(path):
     )
 
 
+def executable_path(value):
+    """Expand user paths without dereferencing launchers such as /snap/bin/blender."""
+    return Path(os.path.expandvars(str(value))).expanduser().absolute()
+
+
+def is_executable(path):
+    return path.is_file() and (sys.platform == 'win32' or os.access(path, os.X_OK))
+
+
+def validate_blender(value):
+    path = executable_path(value)
+    if not path.is_file():
+        raise ValueError('Choose the Blender executable in Advanced settings.')
+    if not is_executable(path):
+        raise ValueError('The Blender file is not executable. Enable its execute permission or choose another executable.')
+    return str(path)
+
+
 def find_blender():
-    candidates=[]
-    if os.environ.get('BLENDER_PATH'):candidates.append(Path(os.environ['BLENDER_PATH']))
-    executable=shutil.which('blender')
-    if executable:candidates.append(Path(executable))
-    base=Path(os.environ.get('ProgramFiles','C:/Program Files'))/'Blender Foundation'
-    def version(path):return tuple(int(n) for n in re.findall(r'\d+',path.parent.name))
-    candidates.extend(sorted(base.glob('Blender */blender.exe'),key=version,reverse=True))
-    candidates.extend([Path('/Applications/Blender.app/Contents/MacOS/Blender'),Path('/usr/bin/blender')])
-    return next((str(p.resolve()) for p in candidates if p.is_file()),'')
+    candidates = []
+    if os.environ.get('BLENDER_PATH'):
+        candidates.append(executable_path(os.environ['BLENDER_PATH']))
+    executable = shutil.which('blender')
+    if executable:
+        candidates.append(Path(executable))
+    def version(path):
+        return tuple(int(n) for n in re.findall(r'\d+', path.parent.name))
+    if sys.platform == 'win32':
+        base = Path(os.environ.get('ProgramFiles', 'C:/Program Files')) / 'Blender Foundation'
+        candidates.extend(sorted(base.glob('Blender */blender.exe'), key=version, reverse=True))
+    elif sys.platform == 'darwin':
+        candidates.append(Path('/Applications/Blender.app/Contents/MacOS/Blender'))
+    else:
+        candidates.extend(Path(p) for p in ('/usr/local/bin/blender', '/usr/bin/blender', '/snap/bin/blender'))
+        for base in (Path('/opt'), Path.home() / '.local/opt'):
+            candidates.extend(sorted(base.glob('blender*/blender'), key=version, reverse=True))
+    return next((str(executable_path(p)) for p in candidates if is_executable(p)), '')
 
 
 @dataclass
@@ -86,7 +114,7 @@ class ModelJob:
     truss_ids: list | None=None
 
     def command(self):
-        if not self.blender.is_file():raise ValueError('Choose the Blender executable in Advanced settings.')
+        program = validate_blender(self.blender)
         if not self.model.is_file() or self.model.suffix.lower()!='.amodel':
             raise ValueError('Choose an existing AquaSim .amodel file.')
         if self.output.suffix.lower()!='.blend':raise ValueError('The output filename must end in .blend.')
@@ -103,7 +131,7 @@ class ModelJob:
               '-o',str(self.output.resolve())]
         if self.cap_openings:args.append('--cap-openings')
         if self.pin_top:args.append('--pin-top')
-        return str(self.blender.resolve()),args
+        return program,args
 
 
 @dataclass
@@ -160,8 +188,7 @@ class PipelineJob:
     def command(self):
         if hasattr(ModelJob.command, 'return_value') or hasattr(ModelJob.command, 'side_effect'):
             return ModelJob(self.blender, self.model, self.output, self.membrane_ids).command()
-        if not self.blender.is_file():
-            raise ValueError('Choose the Blender executable in Advanced settings.')
+        program = validate_blender(self.blender)
         if not self.model.is_file() or self.model.suffix.lower() != '.amodel':
             raise ValueError('Choose an existing AquaSim .amodel file.')
         if self.output.suffix.lower() != '.blend':
@@ -204,5 +231,5 @@ class PipelineJob:
             '--python', str(runner),
             '--', 'pipeline', '--config', str(config_file.resolve())
         ]
-        return str(self.blender.resolve()), args
+        return program, args
 

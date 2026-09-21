@@ -1,0 +1,2 @@
+# POSIX launchers must retain LF endings, including in Windows checkouts.
+*.sh text eol=lf

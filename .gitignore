@@ -27,6 +27,7 @@ __pycache__/
 *.py[cod]
 *.blend1
 .venv/
+.venv-linux/
 
 # Test, analysis and editor caches.
 .pytest_cache/

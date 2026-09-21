@@ -1,7 +1,7 @@
 """Small material regressions independent of visual subjective checks."""
 import sys,unittest
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
 from sim2blender.blender.shading import lattice_pixels
 
 class LatticeTests(unittest.TestCase):

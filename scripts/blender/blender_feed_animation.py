@@ -1,7 +1,7 @@
 """Build a 30 RPM rotating feed arm and a 30 kg/min visual feed stream in Blender.
 
 This script imports 'spreader_move.obj' and 'spreader_still.obj' (by default from
-examples/models/), parents the moving arm to a continuous rotor, and bakes ballistic
+assets/spreaders/default/), parents the moving arm to a continuous rotor, and bakes ballistic
 feed pellets across air and water fluid media.
 
 Can be run directly from Blender GUI Scripting workspace OR via Terminal:
@@ -63,6 +63,14 @@ PELLET_DENSITY_KG_M3 = 1100.0 # 饲料颗粒密度 (kg/m³)
 AIR_DRAG_COEFF = 0.47         # 空气阻力系数
 WATER_DRAG_COEFF = 0.85       # 水中阻力系数
 
+# 水动力环境（海流与波浪）
+CURRENT_SPEED_M_S = 0.25      # 水流流速 (m/s)
+CURRENT_DIR_DEG = 45.0        # 水流方向 (度, 0=+X, 90=+Y)
+WAVE_HEIGHT_M = 0.40          # 波高 (m)
+WAVE_PERIOD_S = 5.0           # 周期 (s)
+WAVE_LENGTH_M = 25.0          # 波长 (m)
+WAVE_DIR_DEG = 30.0           # 波浪传播方向 (度)
+
 
 def main() -> None:
     config = {
@@ -82,6 +90,12 @@ def main() -> None:
         "pellet_density_kg_m3": PELLET_DENSITY_KG_M3,
         "air_drag_coeff": AIR_DRAG_COEFF,
         "water_drag_coeff": WATER_DRAG_COEFF,
+        "current_speed_m_s": CURRENT_SPEED_M_S,
+        "current_direction_deg": CURRENT_DIR_DEG,
+        "wave_height_m": WAVE_HEIGHT_M,
+        "wave_period_s": WAVE_PERIOD_S,
+        "wave_length_m": WAVE_LENGTH_M,
+        "wave_direction_deg": WAVE_DIR_DEG,
     }
     run_feed_animation(config)
 

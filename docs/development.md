@@ -28,10 +28,13 @@ Run from the repository root:
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m unittest discover -s tests -p 'test_*.py' -v
-# With the GUI extra installed:
+# Run all unit tests (standalone Python):
+python -m unittest discover -s tests/unit -p 'test_*.py' -v
+
+# Run GUI tests (requires PySide6):
 python tests/gui/test_app.py
 
+# Run Blender integration tests (using Blender executable):
 $blender = 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe'
 & $blender --background --factory-startup --python-exit-code 1 --python tests/blender/test_blender.py
 & $blender --background --factory-startup --python-exit-code 1 --python tests/blender/test_geometry.py
@@ -75,5 +78,5 @@ Old imports and script entry points are compatibility facades. New commands use 
 Input examples retain their current filenames and paths because saved scenes record source paths. Existing `.blend` animations do not need rebuilding merely because Python modules moved. Changing fish geometry, physics or timing does require rebuilding the dependent animation. Keep user-edited scenes and create new `-o` outputs for trials.
 
 ## Maintenance utilities
-
-`scripts/refresh_scene.py` refreshes materials on the original cloth scene. `render_previews.py` and `plot_project_stats.py` regenerate the original documentation images/plots. Their entry points remain stable. New fish assets belong in `assets/fish/`; large future datasets should use explicit user-managed input paths and generated caches under `output/`.
+ 
+`scripts/maintenance/refresh_scene.py` refreshes materials on the original cloth scene. `scripts/maintenance/render_previews.py` and `scripts/maintenance/plot_project_stats.py` regenerate the original documentation images/plots. Modular interactive Blender scripts reside in `scripts/blender/`. New fish assets belong in `assets/fish/`; large future datasets should use explicit user-managed input paths and generated caches under `output/`.

@@ -3,7 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
 from sim2blender.gui.model_job import ModelJob, ReplayJob, PipelineJob, ModelInfo, inspect_model
 
 
@@ -83,7 +83,7 @@ class ModelJobTests(unittest.TestCase):
         self.assertEqual(info.junctions([3,4]),(0,[]))
 
     def test_real_model_inspection(self):
-        info=inspect_model(Path(__file__).resolve().parents[1]/'examples/models/winch_cage.amodel')
+        info=inspect_model(Path(__file__).resolve().parents[2]/'examples/models/winch_cage.amodel')
         self.assertGreater(info.node_count,0)
         self.assertTrue(info.components)
         self.assertTrue(all(c['faces']>0 for c in info.components))

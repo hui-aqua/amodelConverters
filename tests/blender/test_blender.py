@@ -3,12 +3,17 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 import unittest
-from mathutils import Vector
-from sim2blender.blender.build import Enclosure, boundary_caps, mesh_object, constrain_axes, add_fish_school, stitch_membrane_seams
-from sim2blender.amodel import Node
-import bpy
+try:
+    import bpy
+    from mathutils import Vector
+    from sim2blender.blender.build import Enclosure, boundary_caps, mesh_object, constrain_axes, add_fish_school, stitch_membrane_seams
+    from sim2blender.io.aquasim.model import Node
+    HAS_BLENDER = True
+except ImportError:
+    HAS_BLENDER = False
 
 
+@unittest.skipUnless(HAS_BLENDER, "Blender (bpy) is not available in current Python environment")
 class BlenderTests(unittest.TestCase):
     def setUp(self):
         self.points = [(x,y,z) for z in (-1,1) for y in (-1,1) for x in (-1,1)]

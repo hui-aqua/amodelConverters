@@ -6,14 +6,19 @@ import unittest
 import math
 import inspect
 import xml.etree.ElementTree as ET
-import bpy
-from mathutils import Vector
-from sim2blender.amodel import read_model
-from sim2blender.geometry import component_geometry
-from sim2blender.blender.geometry import member_mesh, local_frame, round_net
-from sim2blender.blender.build import mesh_object, add_fish_school
+try:
+    import bpy
+    from mathutils import Vector
+    from sim2blender.io.aquasim.model import read_model
+    from sim2blender.io.aquasim.sections import component_geometry
+    from sim2blender.blender.geometry import member_mesh, local_frame, round_net
+    from sim2blender.blender.build import mesh_object, add_fish_school
+    HAS_BLENDER = True
+except ImportError:
+    HAS_BLENDER = False
 
 
+@unittest.skipUnless(HAS_BLENDER, "Blender (bpy) is not available in current Python environment")
 class GeometryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

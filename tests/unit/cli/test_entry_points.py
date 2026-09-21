@@ -4,7 +4,7 @@ import runpy
 import sys
 import unittest
 from unittest.mock import Mock,patch
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+sys.path.insert(0,str(Path(__file__).resolve().parents[3]/'src'))
 from sim2blender.cli.blender_entry import main,WORKFLOWS
 
 
@@ -18,7 +18,7 @@ class EntryPointTests(unittest.TestCase):
             workflow.main.assert_called_once_with(['a path with spaces','--fps','25'])
 
     def test_old_and_new_launchers(self):
-        root=Path(__file__).resolve().parents[1]
+        root=Path(__file__).resolve().parents[3]
         for relative in ('scripts/run_workflow.py','launchers/cli/run_workflow.py'):
             self.assertIs(runpy.run_path(str(root/relative))['main'],main)
         from sim2blender.gui.replay_entry import main as old_pipeline

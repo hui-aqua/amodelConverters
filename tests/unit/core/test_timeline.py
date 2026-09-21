@@ -1,4 +1,7 @@
 import unittest
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'src'))
 from sim2blender.core.timeline import frames_from_seconds, sample_frames, wave_timing
 from sim2blender.core.paths import PROJECT_ROOT
 

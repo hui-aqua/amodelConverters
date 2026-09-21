@@ -2,12 +2,16 @@
 import sys, json, math, unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
-import bpy
-from mathutils import Vector
-from sim2blender.blender.geometry import member_mesh
-from sim2blender.blender.scene import mesh_object
-from sim2blender.blender.beam_shading import preprocess_hdpe_beams
-from sim2blender.blender.shading import principled
+try:
+    import bpy
+    from mathutils import Vector
+    from sim2blender.blender.geometry import member_mesh
+    from sim2blender.blender.scene import mesh_object
+    from sim2blender.blender.beam_shading import preprocess_hdpe_beams
+    from sim2blender.blender.shading import principled
+    HAS_BLENDER = True
+except ImportError:
+    HAS_BLENDER = False
 
 
 def pipe(name, length=.55, hollow=True):
@@ -28,6 +32,7 @@ def snapshot(obj):
             tuple(tuple(f.vertices) for f in m.polygons),tuple(obj.matrix_world),dict(obj.items()))
 
 
+@unittest.skipUnless(HAS_BLENDER, "Blender (bpy) is not available in current Python environment")
 class BeamShadingTests(unittest.TestCase):
     def test_imported_model_and_thousand_segments(self):
         import time

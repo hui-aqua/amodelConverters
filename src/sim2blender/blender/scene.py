@@ -49,7 +49,7 @@ def constrain_axes(obj, nodes):
     obj.modifiers.new('Source axis constraints', 'NODES').node_group = group
 
 
-def setup_view(scene, points, collection):
+def setup_view(scene, points, collection, engine: str | None = None):
     """Provide a useful saved viewport and a camera for a quick preview."""
     import bpy
     from mathutils import Vector
@@ -57,6 +57,7 @@ def setup_view(scene, points, collection):
     high = Vector(tuple(max(p[a] for p in points) for a in range(3)))
     center = (low + high) / 2
     size = max((high - low).length, 1)
+
     camera = scene.objects.get('Cage overview')
     if camera is None:
         camera = bpy.data.objects.new('Cage overview', bpy.data.cameras.new('Cage overview'))
@@ -66,23 +67,37 @@ def setup_view(scene, points, collection):
     camera.data.type = 'ORTHO'
     camera.data.ortho_scale = size * 1.1
     camera.data.clip_end = size * 10
-    scene.camera = camera
-    scene.render.engine = 'BLENDER_WORKBENCH'
-    scene.render.resolution_x = 1200
-    scene.render.resolution_y = 1000
+
+    # Only assign overview camera if an active camera (e.g. Cinematic_Camera) is not already set
+    if scene.camera is None:
+        scene.camera = camera
+
+    if engine:
+        scene.render.engine = engine
+    elif scene.get("has_water"):
+        scene.render.engine = 'CYCLES'
+    elif not scene.render.engine or scene.render.engine == 'BLENDER_WORKBENCH':
+        scene.render.engine = 'CYCLES'
+
+    scene.render.resolution_x = 1920
+    scene.render.resolution_y = 1080
     scene.render.resolution_percentage = 100
-    scene.display.shading.light = 'STUDIO'
-    scene.display.shading.color_type = 'MATERIAL'
-    scene.display.shading.show_shadows = False
-    scene.display.shading.show_cavity = True
-    scene.display.shading.background_type = 'WORLD'
-    scene.world = bpy.data.worlds.new('Cage background')
-    scene.world.color = (.025, .035, .05)
+
+    # Preserve existing world (e.g. Ocean Sky) if already configured
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new('Cage background')
+        scene.world.color = (.025, .035, .05)
+
     for area in bpy.context.screen.areas if bpy.context.screen else []:
         if area.type == 'VIEW_3D':
             area.spaces.active.region_3d.view_distance = size * 1.2
             area.spaces.active.region_3d.view_location = center
-            area.spaces.active.region_3d.view_rotation = camera.rotation_euler.to_quaternion()
+            if scene.camera == camera:
+                area.spaces.active.region_3d.view_rotation = camera.rotation_euler.to_quaternion()
             area.spaces.active.clip_end = size * 10
+            # Set viewport screen rendering to Material Preview with scene lighting
+            area.spaces.active.shading.type = 'MATERIAL'
+            area.spaces.active.shading.use_scene_lights = True
+            area.spaces.active.shading.use_scene_world = True
 
 

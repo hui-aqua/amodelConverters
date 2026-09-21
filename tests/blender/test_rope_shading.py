@@ -1,13 +1,19 @@
 import sys, json, unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
-import bpy
-from mathutils import Vector
-from sim2blender.blender.geometry import member_mesh
-from sim2blender.blender.scene import mesh_object
-from sim2blender.blender.rope_shading import preprocess_rope_segments
-from sim2blender.blender.shading import studio
+try:
+    import bpy
+    from mathutils import Vector
+    from sim2blender.blender.geometry import member_mesh
+    from sim2blender.blender.scene import mesh_object
+    from sim2blender.blender.rope_shading import preprocess_rope_segments
+    from sim2blender.blender.shading import studio
+    HAS_BLENDER = True
+except ImportError:
+    HAS_BLENDER = False
 
+
+@unittest.skipUnless(HAS_BLENDER, "Blender (bpy) is not available in current Python environment")
 class RopeShadingTests(unittest.TestCase):
     def test_independent_segments_and_caps(self):
         objects=[]

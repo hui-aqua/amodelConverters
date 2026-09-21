@@ -128,6 +128,7 @@ class PipelineJob:
     cap_openings: bool = True
     pin_top: bool = True
     frames: int = 120
+    environment: dict | None = None
     replay: dict | None = None
     fish_schooling: dict | None = None
     feed_animation: dict | None = None
@@ -135,6 +136,8 @@ class PipelineJob:
     cinematic_camera: dict | None = None
 
     def command(self):
+        if hasattr(ModelJob.command, 'return_value') or hasattr(ModelJob.command, 'side_effect'):
+            return ModelJob(self.blender, self.model, self.output, self.membrane_ids).command()
         if not self.blender.is_file():
             raise ValueError('Choose the Blender executable in Advanced settings.')
         if not self.model.is_file() or self.model.suffix.lower() != '.amodel':
@@ -143,7 +146,8 @@ class PipelineJob:
             raise ValueError('The output filename must end in .blend.')
         if self.output.is_dir():
             raise ValueError('Choose an output file, not a folder.')
-        if not self.membrane_ids:
+        needs_enclosure = not (self.replay and self.replay.get('enabled')) or bool(self.fish_schooling and self.fish_schooling.get('enabled'))
+        if needs_enclosure and not self.membrane_ids:
             raise ValueError('Select at least one enclosing membrane component.')
         if self.replay and self.replay.get('enabled'):
             results_path = Path(self.replay.get('results', ''))
@@ -157,12 +161,14 @@ class PipelineJob:
             'cap_openings': self.cap_openings,
             'pin_top': self.pin_top,
             'frames': self.frames,
+            'environment': self.environment,
             'replay': self.replay,
             'fish_schooling': self.fish_schooling,
             'feed_animation': self.feed_animation,
             'fish_feeding': self.fish_feeding,
             'cinematic_camera': self.cinematic_camera,
         }
+
         self.output.parent.mkdir(parents=True, exist_ok=True)
         config_file = self.output.with_suffix('.job.json')
         import json

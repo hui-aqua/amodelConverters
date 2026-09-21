@@ -1,8 +1,11 @@
 import tempfile
 from pathlib import Path
+import sys
 import unittest
-from sim2blender.amodel import Model, Node
-from sim2blender.results import read_results, map_nodes, sample_frames
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'src'))
+from sim2blender.io.aquasim.model import Model, Node
+from sim2blender.io.aquasim.results import read_results, map_nodes
+from sim2blender.core.timeline import sample_frames
 
 
 class ResultsTests(unittest.TestCase):

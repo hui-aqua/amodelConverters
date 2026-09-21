@@ -16,6 +16,9 @@
 /examples/models/SLS_01.avz
 /examples/models/extractNotd.bat
 
+# Large local spreader models (>100 MB)
+/assets/spreaders/wb/WB_spreader_still.obj
+
 # Python packaging and local environments.
 build/
 dist/

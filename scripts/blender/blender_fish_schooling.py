@@ -51,6 +51,15 @@ FLOW_DIRECTION = 1.0           # 巡游环流方向 (1.0 逆时针, -1.0 顺时�
 WALL_BUFFER_M = 0.05           # 网衣边界防穿透缓冲间距 (m)
 SPECIES = "Atlantic salmon"    # 鱼类品种
 
+# 水动力环境（海流与波浪）
+CURRENT_SPEED_M_S = 0.20        # 水流流速 (m/s)
+CURRENT_DIR_DEG = 45.0          # 水流方向 (度)
+WAVE_HEIGHT_M = 0.40            # 波高 (m)
+WAVE_PERIOD_S = 5.0             # 周期 (s)
+WAVE_LENGTH_M = 25.0            # 波长 (m)
+WAVE_DIR_DEG = 30.0             # 波浪传播方向 (度)
+HYDRO_COUPLING = 0.35           # 水动力耦合强度 (0.0~1.0)
+
 
 def main() -> None:
     config = {
@@ -64,6 +73,13 @@ def main() -> None:
         "flow_direction": FLOW_DIRECTION,
         "wall_buffer_m": WALL_BUFFER_M,
         "species": SPECIES,
+        "current_speed_m_s": CURRENT_SPEED_M_S,
+        "current_direction_deg": CURRENT_DIR_DEG,
+        "wave_height_m": WAVE_HEIGHT_M,
+        "wave_period_s": WAVE_PERIOD_S,
+        "wave_length_m": WAVE_LENGTH_M,
+        "wave_direction_deg": WAVE_DIR_DEG,
+        "hydro_coupling": HYDRO_COUPLING,
     }
     run_fish_schooling(config)
 

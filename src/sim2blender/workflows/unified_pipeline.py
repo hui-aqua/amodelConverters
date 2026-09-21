@@ -3,7 +3,7 @@
 Modular stages:
 1. AquaSim results replay (replaces cloth baking with node displacements from results)
 2. Simple fish schooling
-3. Feed spreader animation (defaults to examples/models/spreader_move.obj and spreader_still.obj)
+3. Feed spreader animation (defaults to assets/spreaders/default/spreader_move.obj and spreader_still.obj)
 4. Fish feeding interaction animation
 5. Cinematic camera
 """
@@ -50,6 +50,9 @@ def build_unified_scene(config: dict) -> None:
     pin_top = bool(config.get("pin_top", True))
     base_frames = int(config.get("frames", 120))
 
+    env_cfg = config.get("environment") or config.get("water")
+    use_env = bool(env_cfg.get("enabled", True)) if isinstance(env_cfg, dict) else (env_cfg is not False)
+
     replay_cfg = config.get("replay")
     use_replay = bool(replay_cfg and replay_cfg.get("enabled", False))
 
@@ -64,6 +67,7 @@ def build_unified_scene(config: dict) -> None:
 
     camera_cfg = config.get("cinematic_camera")
     use_camera = bool(camera_cfg and camera_cfg.get("enabled", False))
+
 
     # 1. Read AquaSim model and extract membrane geometry
     print(f"GUI_STAGE: Reading AquaSim model {model_path.name}…", flush=True)
@@ -82,10 +86,11 @@ def build_unified_scene(config: dict) -> None:
     faces = [tuple(index[n] for n in c["nodes"]) for c in membrane]
     faces = stitch_membrane_seams(faces, points)
 
-    caps = boundary_caps(faces, points, cap_openings)
-
-    # Validate enclosure geometry
-    Enclosure(points, faces + caps).sample(random.Random(7), 0.5)
+    caps = []
+    if use_schooling or not use_replay:
+        caps = boundary_caps(faces, points, cap_openings)
+        # Validate enclosure geometry
+        Enclosure(points, faces + caps).sample(random.Random(7), 0.5)
 
     # Initialize Blender Scene
     scene = bpy.data.scenes.new("Sim2Blender Scene")
@@ -197,6 +202,7 @@ def build_unified_scene(config: dict) -> None:
         cloth.settings.shear_stiffness = 20
         cloth.settings.vertex_group_mass = pins.name
         cloth.settings.effector_weights.gravity = 0.03
+        cloth.settings.air_damping = 5.0
         cloth.point_cache.frame_start = 1
         cloth.point_cache.frame_end = base_frames
 
@@ -218,6 +224,49 @@ def build_unified_scene(config: dict) -> None:
         bpy.context.view_layer.objects.active = cage
         cage.select_set(True)
 
+        # Setup ocean water & hydrodynamic forces BEFORE cloth baking if environment is enabled
+        if use_env:
+            print("GUI_STAGE: Setting up ocean water & hydrodynamic forces for cloth physics…", flush=True)
+            from sim2blender.blender.water import add_water
+            from sim2blender.blender.environment import set_wave_and_current
+
+            env_dict = env_cfg if isinstance(env_cfg, dict) else {}
+            level = float(env_dict.get("water_level_m", env_dict.get("level", 0.0)))
+            depth = float(env_dict.get("water_depth_m", env_dict.get("depth", 100.0)))
+            size = float(env_dict.get("water_size_m", env_dict.get("size", 300.0)))
+
+            curr_speed = float(env_dict.get("current_speed_m_s", env_dict.get("current_speed", 0.15)))
+            curr_dir = float(env_dict.get("current_direction_deg", env_dict.get("current_dir_deg", 0.0)))
+            wave_h = float(env_dict.get("wave_height_m", env_dict.get("wave_height", 0.30)))
+            wave_t = float(env_dict.get("wave_period_s", env_dict.get("wave_period", 6.0)))
+            wave_l = float(env_dict.get("wave_length_m", env_dict.get("wave_length", 25.0)))
+            wave_dir = float(env_dict.get("wave_direction_deg", env_dict.get("wave_dir_deg", 0.0)))
+
+            water_kwargs = {
+                "level": level,
+                "depth": depth,
+                "size": size,
+                "enable_volume": bool(env_dict.get("enable_volume", True)),
+            }
+            for opt in ("surface_resolution", "ior", "roughness", "scatter_density", "absorption_density", "sun_energy", "sun_elevation_deg", "sun_rotation_deg"):
+                if opt in env_dict:
+                    water_kwargs[opt] = env_dict[opt]
+
+            add_water(scene, collection=collection, **water_kwargs)
+
+            set_wave_and_current(
+                scene,
+                current_speed=curr_speed,
+                current_dir_deg=curr_dir,
+                wave_height=wave_h,
+                wave_period=wave_t,
+                wave_length=wave_l,
+                wave_dir_deg=wave_dir,
+                water_level=level,
+                animate_water_surface=True,
+                setup_cloth_forces=True,
+            )
+
         print(f"GUI_STAGE: Simulating cage cloth net ({len(faces)} faces)…", flush=True)
         with bpy.context.temp_override(point_cache=cloth.point_cache):
             bpy.ops.ptcache.bake(bake=True)
@@ -231,7 +280,12 @@ def build_unified_scene(config: dict) -> None:
     if use_feed:
         print("GUI_STAGE: Building feed spreader and ballistic pellets…", flush=True)
         from sim2blender.blender.feed import run_feed_animation
-        run_feed_animation(feed_cfg)
+        feed_params = dict(feed_cfg) if feed_cfg else {}
+        if use_env and isinstance(env_cfg, dict):
+            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m"):
+                if k in env_cfg and k not in feed_params:
+                    feed_params[k] = env_cfg[k]
+        run_feed_animation(feed_params)
 
     # 4. Fish Schooling / Fish Feeding Interaction
     if use_feeding:
@@ -242,17 +296,69 @@ def build_unified_scene(config: dict) -> None:
             for k in ("fish_count", "fish_length_mean_m", "fish_length_std_m", "swim_speed_bl_s", "random_seed"):
                 if k in schooling_cfg and k not in feeding_params:
                     feeding_params[k] = schooling_cfg[k]
+        if use_env and isinstance(env_cfg, dict):
+            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m"):
+                if k in env_cfg and k not in feeding_params:
+                    feeding_params[k] = env_cfg[k]
         run_fish_feeding_animation(feeding_params)
     elif use_schooling:
-        print("GUI_STAGE: Simulating boid fish schooling…", flush=True)
+        print("GUI_STAGE: Adding salmon / fish schooling…", flush=True)
         from sim2blender.blender.fish.school import run_fish_schooling
-        run_fish_schooling(schooling_cfg)
+        schooling_params = dict(schooling_cfg) if schooling_cfg else {}
+        if use_env and isinstance(env_cfg, dict):
+            for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m"):
+                if k in env_cfg and k not in schooling_params:
+                    schooling_params[k] = env_cfg[k]
+        run_fish_schooling(schooling_params)
+
+    # 4.5 Ocean Water & Wave/Current Environment (if not already initialized before cloth baking)
+    if use_env and not scene.get("hydrodynamics_active"):
+        print("GUI_STAGE: Building ocean water below Z = 0 & wave/current hydrodynamics…", flush=True)
+        from sim2blender.blender.water import add_water
+        from sim2blender.blender.environment import set_wave_and_current
+
+        env_dict = env_cfg if isinstance(env_cfg, dict) else {}
+        level = float(env_dict.get("water_level_m", env_dict.get("level", 0.0)))
+        depth = float(env_dict.get("water_depth_m", env_dict.get("depth", 100.0)))
+        size = float(env_dict.get("water_size_m", env_dict.get("size", 300.0)))
+
+        curr_speed = float(env_dict.get("current_speed_m_s", env_dict.get("current_speed", 0.15)))
+        curr_dir = float(env_dict.get("current_direction_deg", env_dict.get("current_dir_deg", 0.0)))
+        wave_h = float(env_dict.get("wave_height_m", env_dict.get("wave_height", 0.30)))
+        wave_t = float(env_dict.get("wave_period_s", env_dict.get("wave_period", 6.0)))
+        wave_l = float(env_dict.get("wave_length_m", env_dict.get("wave_length", 25.0)))
+        wave_dir = float(env_dict.get("wave_direction_deg", env_dict.get("wave_dir_deg", 0.0)))
+
+        water_kwargs = {
+            "level": level,
+            "depth": depth,
+            "size": size,
+            "enable_volume": bool(env_dict.get("enable_volume", True)),
+        }
+        for opt in ("surface_resolution", "ior", "roughness", "scatter_density", "absorption_density", "sun_energy", "sun_elevation_deg", "sun_rotation_deg"):
+            if opt in env_dict:
+                water_kwargs[opt] = env_dict[opt]
+
+        add_water(scene, collection=collection, **water_kwargs)
+
+        set_wave_and_current(
+            scene,
+            current_speed=curr_speed,
+            current_dir_deg=curr_dir,
+            wave_height=wave_h,
+            wave_period=wave_t,
+            wave_length=wave_l,
+            wave_dir_deg=wave_dir,
+            water_level=level,
+            animate_water_surface=True,
+        )
 
     # 5. Cinematic Camera
     if use_camera:
         print("GUI_STAGE: Setting up cinematic camera…", flush=True)
         from sim2blender.blender.camera import setup_cinematic_camera
         setup_cinematic_camera(camera_cfg)
+
 
     # 6. Final Shading, View, and Scene Export
     scene.frame_set(1)
@@ -267,6 +373,41 @@ def build_unified_scene(config: dict) -> None:
     ]
     report_path.write_text(json.dumps(geometry_report, indent=2), encoding="utf-8")
     scene["geometry_report"] = str(report_path.resolve())
+
+    if use_replay:
+        dur_sec = step_sec * (len(results.times) - 1)
+        obj_count = len(model.components) if hasattr(model, 'components') else len({c.get("component_id", i) for i, c in enumerate(model.cells)})
+        replay_report = dict(
+            steps=len(results.times),
+            video_fps=fps,
+            structural_step_seconds=step_sec,
+            last_sample_frame=replay_frames[-1],
+            video_frame_end=scene.frame_end,
+            duration_seconds=dur_sec,
+            objects=obj_count,
+            wave_period_seconds=wave_period,
+            structural_frames_per_wave=frames_per_wave,
+        )
+        output_path.with_suffix(".replay.json").write_text(json.dumps(replay_report, indent=2), encoding="utf-8")
+        output_path.with_suffix(".json").write_text(json.dumps(replay_report, indent=2), encoding="utf-8")
+
+    if use_schooling:
+        fish_count = int(schooling_cfg.get("fish_count", 1000))
+        struct_step = scene.get("structural_step_seconds", 1.0 / scene.render.fps)
+        if use_replay:
+            dur_sec = struct_step * (len(results.times) - 1)
+        else:
+            dur_sec = (scene.frame_end - 1) / scene.render.fps if scene.render.fps else 0.0
+        fish_report = dict(
+            fish_count=fish_count,
+            frames=scene.frame_end,
+            video_fps=scene.render.fps,
+            structural_step_seconds=struct_step,
+            duration_seconds=dur_sec,
+        )
+        output_path.with_suffix(".fish.json").write_text(json.dumps(fish_report, indent=2), encoding="utf-8")
+    else:
+        output_path.with_suffix(".fish.json").unlink(missing_ok=True)
 
     print(f"GUI_STAGE: Saving scene to {output_path.name}…", flush=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(output_path.resolve()))

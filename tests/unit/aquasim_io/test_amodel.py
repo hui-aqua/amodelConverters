@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from sim2blender.amodel import read_model
-from sim2blender.obj import write_obj
-from sim2blender.vtp import build_piece_xml
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'src'))
+from sim2blender.io.aquasim.model import read_model
+from sim2blender.exporters.obj import write_obj
+from sim2blender.exporters.vtp import build_piece_xml
 
 
 class ReaderTests(unittest.TestCase):

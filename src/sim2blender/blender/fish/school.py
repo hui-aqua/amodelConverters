@@ -128,6 +128,16 @@ def run_fish_schooling(config: dict | None = None) -> None:
         bpy.ops.object.mode_set(mode="OBJECT")
 
     scene = bpy.context.scene
+    # Resolve hydrodynamics from config, falling back to scene properties if available
+    current_speed = float(cfg.get("current_speed_m_s", cfg.get("current_speed", scene.get("current_speed_m_s", 0.0))))
+    current_dir_deg = float(cfg.get("current_direction_deg", cfg.get("current_dir_deg", scene.get("current_direction_deg", 0.0))))
+    wave_height = float(cfg.get("wave_height_m", cfg.get("wave_height", scene.get("wave_height_m", 0.0))))
+    wave_period = float(cfg.get("wave_period_s", cfg.get("wave_period", scene.get("wave_period_s", 5.0))))
+    wave_length = float(cfg.get("wave_length_m", cfg.get("wave_length", scene.get("wave_length_m", 30.0))))
+    wave_dir_deg = float(cfg.get("wave_direction_deg", cfg.get("wave_dir_deg", scene.get("wave_direction_deg", 0.0))))
+    water_level = float(cfg.get("water_level_m", cfg.get("water_level", scene.get("water_level_z", 0.0))))
+    hydro_coupling = float(cfg.get("hydro_coupling", 0.35))
+
     fps = scene.render.fps / scene.render.fps_base
     frame_start = scene.frame_start
     frame_end = scene.frame_end
@@ -220,11 +230,31 @@ def run_fish_schooling(config: dict | None = None) -> None:
                 cruise_dir = Vector((1.0, 0.0, 0.0))
             cruise_dir.normalize()
 
-            current_speed = fish_cruise_speeds[i]
-            direction = (v * 0.82 + cruise_dir * 0.18).normalized()
-            step_length = current_speed / fps if frame > frame_start else 0.0
+            swim_speed = fish_cruise_speeds[i]
+            swim_vec = (v * 0.82 + cruise_dir * 0.18).normalized() * (swim_speed / fps if frame > frame_start else 0.0)
 
-            target_p = p + direction * step_length
+            # Ambient hydrodynamic velocity (current advection + wave orbital kinematics)
+            if (current_speed > 0.0 or wave_height > 0.0) and frame > frame_start:
+                from sim2blender.blender.environment import calculate_water_velocity
+                v_water = calculate_water_velocity(
+                    p, elapsed_s,
+                    current_speed=current_speed,
+                    current_dir_deg=current_dir_deg,
+                    wave_height=wave_height,
+                    wave_period=wave_period,
+                    wave_length=wave_length,
+                    wave_dir_deg=wave_dir_deg,
+                    water_level=water_level,
+                )
+                water_step = (v_water / fps) * hydro_coupling
+            else:
+                water_step = Vector((0.0, 0.0, 0.0))
+
+            total_step = swim_vec + water_step
+            step_length = total_step.length
+            direction = total_step.normalized() if step_length > 1e-6 else v
+
+            target_p = p + total_step
             if enclosure.contains(p, clearance_i + step_length) and enclosure.contains(target_p, clearance_i):
                 p = target_p
             else:

@@ -2,13 +2,18 @@
 import sys,unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
-import bpy
-from mathutils import Vector
-from sim2blender.amodel import Model,Node
-from sim2blender.blender.build import mesh_object
-from sim2blender.blender.ropes import rope_centerline,create_rope_cloth,rope_surface,rigid_beams,sample_node_motion
+try:
+    import bpy
+    from mathutils import Vector
+    from sim2blender.io.aquasim.model import Model, Node
+    from sim2blender.blender.build import mesh_object
+    from sim2blender.blender.ropes import rope_centerline, create_rope_cloth, rope_surface, rigid_beams, sample_node_motion
+    HAS_BLENDER = True
+except ImportError:
+    HAS_BLENDER = False
 
 
+@unittest.skipUnless(HAS_BLENDER, "Blender (bpy) is not available in current Python environment")
 class RopeTests(unittest.TestCase):
     def model(self):
         nodes={i:Node(i,(float(i),0,0),(True,True,True)) for i in range(3)}

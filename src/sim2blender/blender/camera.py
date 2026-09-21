@@ -9,20 +9,31 @@ Builds a dynamic look-at target and animates camera waypoints through three phas
 from __future__ import annotations
 
 import math
-import os
-from pathlib import Path
-import sys
 
 import bpy
 from mathutils import Vector
 
-FOCAL_LENGTH_MM = 32.0
-ENABLE_DEPTH_OF_FIELD = True
-FSTOP = 3.5
+DEFAULT_CAMERA_CONFIG = {
+    "focal_length_mm": 32.0,
+    "enable_depth_of_field": True,
+    "fstop": 3.5,
+    "overview_height_m": 52.0,
+    "overview_distance_m": 104.0,
+    "water_entry_depth_m": -3.5,
+    "swoop_height_m": 2.6,
+    "phase1_percent": 0.35,
+    "phase2_percent": 0.60,
+    "clip_start_m": 0.1,
+    "clip_end_m": 500.0,
+}
 
-OVERVIEW_HEIGHT_M = 52.0
-OVERVIEW_DISTANCE_M = 104.0
-WATER_ENTRY_DEPTH_M = -3.5
+# Backward compatibility aliases
+FOCAL_LENGTH_MM = DEFAULT_CAMERA_CONFIG["focal_length_mm"]
+ENABLE_DEPTH_OF_FIELD = DEFAULT_CAMERA_CONFIG["enable_depth_of_field"]
+FSTOP = DEFAULT_CAMERA_CONFIG["fstop"]
+OVERVIEW_HEIGHT_M = DEFAULT_CAMERA_CONFIG["overview_height_m"]
+OVERVIEW_DISTANCE_M = DEFAULT_CAMERA_CONFIG["overview_distance_m"]
+WATER_ENTRY_DEPTH_M = DEFAULT_CAMERA_CONFIG["water_entry_depth_m"]
 
 
 def get_scene_focus_center() -> tuple[Vector, float]:
@@ -49,18 +60,18 @@ def get_scene_focus_center() -> tuple[Vector, float]:
 
 def setup_cinematic_camera(config: dict | None = None) -> None:
     """Set up multi-phase cinematic camera tracking with specified config."""
-    cfg = config or {}
-    focal_length = float(cfg.get("focal_length_mm", FOCAL_LENGTH_MM))
-    enable_dof = bool(cfg.get("enable_depth_of_field", ENABLE_DEPTH_OF_FIELD))
-    fstop = float(cfg.get("fstop", FSTOP))
-    overview_h = float(cfg.get("overview_height_m", OVERVIEW_HEIGHT_M))
-    overview_dist = float(cfg.get("overview_distance_m", OVERVIEW_DISTANCE_M))
-    water_depth = float(cfg.get("water_entry_depth_m", WATER_ENTRY_DEPTH_M))
-    phase1_pct = float(cfg.get("phase1_percent", 0.35))
-    phase2_pct = float(cfg.get("phase2_percent", 0.60))
-    clip_start = float(cfg.get("clip_start_m", 0.1))
-    clip_end = float(cfg.get("clip_end_m", 500.0))
-    swoop_h = float(cfg.get("swoop_height_m", 2.6))
+    cfg = {**DEFAULT_CAMERA_CONFIG, **(config or {})}
+    focal_length = float(cfg["focal_length_mm"])
+    enable_dof = bool(cfg["enable_depth_of_field"])
+    fstop = float(cfg["fstop"])
+    overview_h = float(cfg["overview_height_m"])
+    overview_dist = float(cfg["overview_distance_m"])
+    water_depth = float(cfg["water_entry_depth_m"])
+    phase1_pct = float(cfg["phase1_percent"])
+    phase2_pct = float(cfg["phase2_percent"])
+    clip_start = float(cfg["clip_start_m"])
+    clip_end = float(cfg["clip_end_m"])
+    swoop_h = float(cfg["swoop_height_m"])
 
     if bpy.context.mode != "OBJECT" and bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode="OBJECT")

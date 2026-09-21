@@ -89,6 +89,7 @@ def build(args):
     cloth.settings.shear_stiffness = 20
     cloth.settings.vertex_group_mass = pins.name
     cloth.settings.effector_weights.gravity = .03
+    cloth.settings.air_damping = 5.0
     cloth.point_cache.frame_start = 1
     cloth.point_cache.frame_end = args.frames
     constrain_axes(cage, nodes)
@@ -115,6 +116,24 @@ def build(args):
     scene.frame_set(1)
     bpy.context.view_layer.objects.active = cage
     cage.select_set(True)
+
+    if not getattr(args, 'no_water', False):
+        from sim2blender.blender.water import add_water
+        from sim2blender.blender.environment import set_wave_and_current
+        add_water(scene, collection=collection, level=getattr(args, 'water_level', 0.0))
+        set_wave_and_current(
+            scene,
+            current_speed=getattr(args, 'current_speed', 0.15),
+            current_dir_deg=getattr(args, 'current_dir', 0.0),
+            wave_height=getattr(args, 'wave_height', 0.30),
+            wave_period=getattr(args, 'wave_period', 6.0),
+            wave_length=getattr(args, 'wave_length', 25.0),
+            wave_dir_deg=getattr(args, 'wave_dir', 0.0),
+            water_level=getattr(args, 'water_level', 0.0),
+            animate_water_surface=True,
+            setup_cloth_forces=True,
+        )
+
     print(f'Baking cloth: {len(faces)} faces, {len(fixed)} fixed vertices, {len(caps)} virtual caps', flush=True)
     with bpy.context.temp_override(point_cache=cloth.point_cache):
         bpy.ops.ptcache.bake(bake=True)
@@ -126,11 +145,11 @@ def build(args):
     add_fish_school(cage, faces + caps, args.fish_count, args.frames, args.fish_length, args.speed, args.seed,
                     fish_asset=getattr(args, 'fish_asset', None), fish_object=getattr(args, 'fish_object', None), species=getattr(args, 'fish_species', 'Atlantic salmon'))
     round_net(cage, membrane, ids)
-    scene['simulation_note'] = 'Membrane and ropes use baked Cloth; beams are passive rigid supports. Shared nodes use one-way baked attachments, without force feedback. Virtual caps are containment-only. Fish validated at integer frames.'
     scene.frame_set(1)
     setup_view(scene, points, collection)
     from sim2blender.blender.shading import apply_visualization
     apply_visualization(scene, cage)
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
     import json
     report_path = args.output.with_suffix('.geometry.json')

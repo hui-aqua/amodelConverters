@@ -107,55 +107,137 @@ def shade_net(cage):
     cage['net_display']='Source-sized round FE edges plus packed open-mesh lattice shading. Metric UVs deform with cloth; material transparency is visual only.'
 
 
-def studio(scene):
+
+
+def setup_screen_rendering(
+    scene,
+    engine: str | None = None,
+    samples: int = 64,
+    resolution: tuple[int, int] = (1920, 1080),
+    use_denoising: bool = True,
+    exposure: float = 0.0,
+):
+    """Configure modern viewport and screen rendering settings for Cycles and EEVEE Next."""
+    import bpy
+
+    target_engine = engine or ("CYCLES" if scene.get("has_water") else "CYCLES")
+    scene.render.engine = target_engine
+    scene.render.resolution_x = resolution[0]
+    scene.render.resolution_y = resolution[1]
+    scene.render.resolution_percentage = 100
+
+    if hasattr(scene, "view_settings"):
+        # Use AgX if available (Blender 4.0+), fallback to standard
+        try:
+            scene.view_settings.view_transform = "AgX"
+        except Exception:
+            scene.view_settings.view_transform = "Standard"
+        scene.view_settings.exposure = exposure
+
+    if target_engine == "CYCLES":
+        scene.cycles.samples = samples
+        scene.cycles.use_denoising = use_denoising
+        scene.cycles.transparent_max_bounces = 16
+        if hasattr(scene.cycles, "transmission_bounces"):
+            scene.cycles.transmission_bounces = 8
+        if hasattr(scene.cycles, "volume_bounces"):
+            scene.cycles.volume_bounces = 4
+
+    # EEVEE Next screen-space raytracing and volumetrics (Blender 4.2+)
+    if hasattr(scene, "eevee"):
+        if hasattr(scene.eevee, "use_raytracing"):
+            scene.eevee.use_raytracing = True
+        if hasattr(scene.eevee, "use_fast_gi"):
+            scene.eevee.use_fast_gi = True
+        if hasattr(scene.eevee, "use_volumetric_shadows"):
+            scene.eevee.use_volumetric_shadows = True
+
+    # Configure 3D viewport screen shading for authentic material & light display
+    for area in bpy.context.screen.areas if bpy.context.screen else []:
+        if area.type == "VIEW_3D":
+            for space in area.spaces:
+                if space.type == "VIEW_3D":
+                    space.shading.type = "MATERIAL"
+                    space.shading.use_scene_lights = True
+                    space.shading.use_scene_world = True
+
+
+def studio(scene, cage=None):
+    """Set up lighting and screen rendering, adapting between ocean daylight and studio inspection."""
     import bpy
     from mathutils import Vector
-    scene.render.engine='CYCLES'
-    scene.cycles.samples=32
-    scene.cycles.use_denoising=True
-    scene.cycles.transparent_max_bounces=16
-    scene.render.resolution_x=1400;scene.render.resolution_y=1100;scene.render.resolution_percentage=100
-    scene.view_settings.view_transform='AgX'
-    scene.view_settings.exposure=0
-    if scene.world is None:scene.world=bpy.data.worlds.new('Cage studio')
-    scene.world.use_nodes=True
-    bg=scene.world.node_tree.nodes.get('Background')
-    bg.inputs['Color'].default_value=(.055,.085,.13,1);bg.inputs['Strength'].default_value=.2
-    cage=scene.objects['Membrane cage']
-    points=[v.co for v in cage.data.vertices]
-    target=Vector(tuple((min(p[a] for p in points)+max(p[a] for p in points))/2 for a in range(3)))
-    scale=max((max(p.z for p in points)-min(p.z for p in points))/50, .01)
-    for name,location,power,size,color in [('Key softbox',(35,-55,35),45000,65,(.8,.91,1)),('Warm fill',(-55,-15,-20),27500,50,(.8,.86,1)),('Rim',(15,55,-5),44000,60,(.45,.68,1))]:
-        obj=scene.objects.get(name)
+
+    setup_screen_rendering(scene)
+
+    if cage is None:
+        cage = scene.objects.get("Membrane cage") or next(
+            (o for o in scene.objects if o.type == "MESH" and hasattr(o.data, "vertices") and len(o.data.vertices) > 0),
+            None,
+        )
+
+    if cage and cage.type == "MESH" and cage.data.vertices:
+        points = [v.co for v in cage.data.vertices]
+        target = Vector(tuple((min(p[a] for p in points) + max(p[a] for p in points)) / 2 for a in range(3)))
+        scale = max((max(p.z for p in points) - min(p.z for p in points)) / 50, 0.01)
+    else:
+        target = Vector((0.0, 0.0, 0.0))
+        scale = 1.0
+
+    lights_spec = [
+        ("Key softbox", (35, -55, 35), 45000, 65, (0.8, 0.91, 1)),
+        ("Warm fill", (-55, -15, -20), 27500, 50, (0.8, 0.86, 1)),
+        ("Rim", (15, 55, -5), 44000, 60, (0.45, 0.68, 1)),
+    ]
+    for name, location, power, size, color in lights_spec:
+        obj = scene.objects.get(name)
         if obj is None:
-            obj=bpy.data.objects.new(name,bpy.data.lights.new(name,'AREA'));scene.collection.objects.link(obj)
-        obj.location=target+Vector(location)*scale;obj.rotation_euler=(target-obj.location).to_track_quat('-Z','Y').to_euler()
-        obj.data.energy=power*scale*scale;obj.data.shape='DISK';obj.data.size=size*scale;obj.data.color=color
-    for area in bpy.context.screen.areas if bpy.context.screen else []:
-        if area.type=='VIEW_3D':
-            area.spaces.active.shading.type='MATERIAL'
-            area.spaces.active.shading.use_scene_lights=True
-            area.spaces.active.shading.use_scene_world=True
+            obj = bpy.data.objects.new(name, bpy.data.lights.new(name, "AREA"))
+            scene.collection.objects.link(obj)
+        obj.location = target + Vector(location) * scale
+        obj.rotation_euler = (target - obj.location).to_track_quat("-Z", "Y").to_euler()
+        obj.data.energy = power * scale * scale
+        obj.data.shape = "DISK"
+        obj.data.size = size * scale
+        obj.data.color = color
+
+    # When ocean water is present, physical daylight (Ocean Sun + Ocean Sky) is active.
+    if scene.get("has_water"):
+        return
+
+    # Net-only inspection studio lighting
+    if scene.world is None or scene.world.name == "Ocean Sky":
+        scene.world = bpy.data.worlds.new("Cage studio")
+    scene.world.use_nodes = True
+    bg = scene.world.node_tree.nodes.get("Background")
+    if bg:
+        bg.inputs["Color"].default_value = (0.055, 0.085, 0.13, 1)
+        bg.inputs["Strength"].default_value = 0.2
 
 
-def apply_visualization(scene,cage):
+def apply_visualization(scene, cage):
     from sim2blender.blender.beam_shading import preprocess_hdpe_beams
     preprocess_hdpe_beams(scene.objects)
     from sim2blender.blender.rope_shading import preprocess_rope_segments
     preprocess_rope_segments(scene.objects)
     shade_net(cage)
     for obj in scene.objects:
-        if obj.type!='MESH':continue
-        if obj.get('component_type')=='beam':
+        if obj.type != "MESH":
+            continue
+        if obj.get("component_type") == "beam":
             for mat in obj.data.materials:
-                shader=principled(mat,(.005,.005,.005),.5,0)
-                shader.inputs['IOR'].default_value=1.5
-                shader.inputs['Coat Weight'].default_value=0
-                shader.inputs['Transmission Weight'].default_value=0
-                mat['material_description']='Black HDPE; non-metallic satin plastic'
-        elif obj.get('component_type')=='truss':
-            for mat in obj.data.materials:principled(mat,(.33,.21,.075),.6)
-        elif obj.name.startswith('Fish_') and not obj.get('fish_asset_custom', False):
-            for mat in obj.data.materials:principled(mat,tuple(mat.diffuse_color[:3]),.32,.3)
-    if cage.data.materials:principled(cage.data.materials[0],(.04,.2,.15),.48)
-    studio(scene)
+                shader = principled(mat, (0.005, 0.005, 0.005), 0.5, 0)
+                shader.inputs["IOR"].default_value = 1.5
+                if "Coat Weight" in shader.inputs:
+                    shader.inputs["Coat Weight"].default_value = 0
+                if "Transmission Weight" in shader.inputs:
+                    shader.inputs["Transmission Weight"].default_value = 0
+                mat["material_description"] = "Black HDPE; non-metallic satin plastic"
+        elif obj.get("component_type") == "truss":
+            for mat in obj.data.materials:
+                principled(mat, (0.33, 0.21, 0.075), 0.6)
+        elif obj.name.startswith("Fish_") and not obj.get("fish_asset_custom", False):
+            for mat in obj.data.materials:
+                principled(mat, tuple(mat.diffuse_color[:3]), 0.32, 0.3)
+    if cage.data.materials:
+        principled(cage.data.materials[0], (0.04, 0.2, 0.15), 0.48)
+    studio(scene, cage)

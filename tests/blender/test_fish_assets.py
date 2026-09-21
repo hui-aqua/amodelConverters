@@ -4,14 +4,19 @@ import sys
 import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'src'))
-import bpy
-from mathutils import Vector
-from sim2blender.blender.fish.assets import load_fish_template
-from sim2blender.blender.fish.school import add_fish_school
-from sim2blender.blender.enclosure import Enclosure
-from sim2blender.blender.scene import mesh_object
+try:
+    import bpy
+    from mathutils import Vector
+    from sim2blender.blender.fish.assets import load_fish_template
+    from sim2blender.blender.fish.school import add_fish_school
+    from sim2blender.blender.enclosure import Enclosure
+    from sim2blender.blender.scene import mesh_object
+    HAS_BLENDER = True
+except ImportError:
+    HAS_BLENDER = False
 
 
+@unittest.skipUnless(HAS_BLENDER, "Blender (bpy) is not available in current Python environment")
 class FishAssetTests(unittest.TestCase):
     def test_default_salmon_dimensions_and_mass(self):
         template = load_fish_template()

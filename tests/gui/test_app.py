@@ -158,5 +158,46 @@ class GuiTests(unittest.TestCase):
         finally:
             themed.close();themed.deleteLater();APP.processEvents()
 
+    def test_stage_config_tab_visibility(self):
+        # Default fresh state: opt_env and opt_schooling are checked
+        self.window.opt_env.setChecked(True)
+        self.window.opt_replay.setChecked(False)
+        self.window.opt_schooling.setChecked(True)
+        self.window.opt_feed.setChecked(False)
+        self.window.opt_feeding.setChecked(False)
+        self.window.opt_camera.setChecked(False)
+
+        self.assertTrue(self.window.tab_config.isTabVisible(0))
+        self.assertFalse(self.window.tab_config.isTabVisible(1))
+        self.assertTrue(self.window.tab_config.isTabVisible(2))
+        self.assertFalse(self.window.tab_config.isTabVisible(3))
+        self.assertFalse(self.window.tab_config.isTabVisible(4))
+        self.assertFalse(self.window.tab_config.isTabVisible(5))
+
+        # Toggling a stage reveals its configuration tab
+        self.window.opt_camera.setChecked(True)
+        self.assertTrue(self.window.tab_config.isTabVisible(5))
+
+        # Toggling a stage off hides its configuration tab
+        self.window.opt_schooling.setChecked(False)
+        self.assertFalse(self.window.tab_config.isTabVisible(2))
+
+        # Clicking switch_to_config_tab auto-activates unselected stage
+        self.window.switch_to_config_tab(3)
+        self.assertTrue(self.window.opt_feed.isChecked())
+        self.assertTrue(self.window.tab_config.isTabVisible(3))
+        self.assertEqual(self.window.tab_config.currentIndex(), 3)
+
+        # Deselecting all stages hides the tab widget and reveals the placeholder
+        self.window.opt_env.setChecked(False)
+        self.window.opt_replay.setChecked(False)
+        self.window.opt_feed.setChecked(False)
+        self.window.opt_feeding.setChecked(False)
+        self.window.opt_camera.setChecked(False)
+        self.window.show()
+        self.assertTrue(self.window.tab_config.isHidden())
+        self.assertFalse(self.window.no_stages_placeholder.isHidden())
+
 
 if __name__=='__main__':unittest.main()
+

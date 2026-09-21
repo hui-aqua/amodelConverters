@@ -1,4 +1,7 @@
 """Presentation helpers for result-driven animation."""
+from __future__ import annotations
+from pathlib import Path
+
 
 
 def track_enclosure(scene, cage):
@@ -16,8 +19,8 @@ def track_enclosure(scene, cage):
     scene.frame_set(1)
     origin, original_size = bounds(keys[0])
     direction = (camera.location-origin).normalized()
-    lights = [scene.objects[name] for name in ('Key softbox', 'Warm fill', 'Rim')]
-    lighting = [(light, light.location-origin, light.data.energy, light.data.size) for light in lights]
+    lights = [scene.objects[name] for name in ('Key softbox', 'Warm fill', 'Rim') if name in scene.objects]
+    lighting = [(light, light.location-origin, light.data.energy, getattr(light.data, 'size', 1.0)) for light in lights]
     for step, key in enumerate(keys):
         frame = scene['source_frames'][step]
         center, size = bounds(key)
@@ -30,16 +33,25 @@ def track_enclosure(scene, cage):
             light.location = center + offset*scale
             light.keyframe_insert('location', frame=frame)
             light.data.energy = energy*scale*scale
-            light.data.size = extent*scale
+            if hasattr(light.data, 'size'):
+                light.data.size = extent*scale
+                light.data.keyframe_insert('size', frame=frame)
             light.data.keyframe_insert('energy', frame=frame)
-            light.data.keyframe_insert('size', frame=frame)
     for datablock in [camera, camera.data, *lights, *(light.data for light in lights)]:
-        for layer in datablock.animation_data.action.layers:
-            for strip in layer.strips:
-                for bag in strip.channelbags:
-                    for curve in bag.fcurves:
-                        for key in curve.keyframe_points:
-                            key.interpolation = 'LINEAR'
+        if not (datablock and getattr(datablock, "animation_data", None) and datablock.animation_data.action):
+            continue
+        action = datablock.animation_data.action
+        fcurves = []
+        if hasattr(action, "layers"):
+            for layer in action.layers:
+                for strip in getattr(layer, "strips", []):
+                    for bag in getattr(strip, "channelbags", []):
+                        fcurves.extend(getattr(bag, "fcurves", []))
+        if hasattr(action, "fcurves") and action.fcurves:
+            fcurves.extend(action.fcurves)
+        for curve in fcurves:
+            for key in curve.keyframe_points:
+                key.interpolation = 'LINEAR'
     scene['camera_tracking'] = 'Animated net bounds; camera and studio lights follow each recorded step'
     scene.frame_set(1)
 

@@ -1,11 +1,12 @@
 """Regenerate the README's source-data chart (requires the plots extra)."""
 from pathlib import Path
 import sys
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'src'))
 from collections import Counter
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
-from sim2blender.amodel import PROJECT_ROOT,read_model
+from sim2blender.core.paths import PROJECT_ROOT
+from sim2blender.io.aquasim.model import read_model
 model=read_model(PROJECT_ROOT/'examples/models/winch_cage.amodel')
 components={c['component_id']:c for c in model.cells}
 counts=Counter(c['component_tag'] for c in components.values())

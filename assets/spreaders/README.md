@@ -2,6 +2,10 @@
 
 This directory contains 3D assets for fish farm feed spreaders (rotor arms and stationary bases).
 
+Spreader OBJ files use +Y up and -Z forward. Import converts coordinates to
+Blender's +Z up (`(x, y, z)` becomes `(x, -z, y)`) and bakes this into mesh
+vertices so waterline positioning and rotor animation preserve the orientation.
+
 ## Directory Structure
 
 ```text

@@ -13,7 +13,7 @@ import random
 
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 from sim2blender.core.paths import PROJECT_ROOT
 
@@ -67,18 +67,28 @@ WATER_SPIN_DAMPING = DEFAULT_FEED_CONFIG["water_spin_damping"]
 
 
 def import_obj_file(filepath: str | Path) -> list[bpy.types.Object]:
-    """Import OBJ file into Blender with cross-version compatibility."""
+    """Import Y-up spreader geometry, baking the conversion into Z-up mesh data.
+
+    The rotor and waterline rigs reset object transforms when parenting, so
+    the OBJ axis conversion must not be left in the object rotation.
+    """
     path = Path(filepath).resolve()
     if not path.is_file():
         return []
     before = set(bpy.data.objects)
     if hasattr(bpy.ops.wm, "obj_import"):
-        bpy.ops.wm.obj_import(filepath=str(path))
+        bpy.ops.wm.obj_import(filepath=str(path), forward_axis="NEGATIVE_Z", up_axis="Y")
     elif hasattr(bpy.ops.import_scene, "obj"):
-        bpy.ops.import_scene.obj(filepath=str(path))
+        bpy.ops.import_scene.obj(filepath=str(path), axis_forward="-Z", axis_up="Y")
     else:
         return []
-    return [o for o in bpy.data.objects if o not in before]
+    imported = [o for o in bpy.data.objects if o not in before]
+    for obj in imported:
+        if obj.type == "MESH":
+            obj.data.transform(obj.matrix_basis)
+            obj.data.update()
+            obj.matrix_basis = Matrix.Identity(4)
+    return imported
 
 
 def find_or_import_spreader_move_object(

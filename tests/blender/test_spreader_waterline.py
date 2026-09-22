@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 import unittest
+import tempfile
 
 try:
     import bpy
@@ -82,6 +83,23 @@ class SpreaderWaterlineTests(unittest.TestCase):
 
         # Ruler scale matches offset
         self.assertAlmostEqual(ruler_obj.scale.z, 0.52, places=3)
+
+    def test_y_up_obj_conversion_survives_rig_parenting(self):
+        """Source +Y becomes +Z even after the rig resets object rotation."""
+        with tempfile.TemporaryDirectory() as folder:
+            paths = [Path(folder) / f"spreader_{part}.obj" for part in ("move", "still")]
+            for path in paths:
+                path.write_text("v 0 0 0\nv 1 2 3\nv 1 0 0\nf 1 2 3\n")
+            result = visualize_spreader_waterline(
+                move_obj_path=paths[0], still_obj_path=paths[1],
+                z_offset=0.52, water_level_z=1.0, scene=self.scene,
+                setup_interactive_ui=False, setup_camera_and_lighting=False,
+            )
+            for key in ("spreader_move", "spreader_still"):
+                obj = result[key]
+                point = obj.matrix_world @ obj.data.vertices[1].co
+                for actual, expected in zip(point, (1.0, -3.0, 3.52)):
+                    self.assertAlmostEqual(actual, expected, places=5)
 
     def test_custom_water_level_and_offset(self):
         """Test custom non-zero water level (e.g. Z = -1.5m) and custom lift (0.80m)."""

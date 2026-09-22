@@ -88,14 +88,12 @@ def build_frustum_pyramid_mesh(
 
     # Vertices in camera local coordinate space (camera looks down -Z)
     verts = [
-        # 0: Apex (camera optical origin)
-        (0.0, 0.0, 0.0),
-        # 1-4: Near plane rectangle
+        # 0-3: Near plane rectangle
         (-x_near, -y_near, -d_near),
         (x_near, -y_near, -d_near),
         (x_near, y_near, -d_near),
         (-x_near, y_near, -d_near),
-        # 5-8: Far plane rectangle at visual_distance_m
+        # 4-7: Far plane rectangle at visual_distance_m
         (-x_far, -y_far, -d_far),
         (x_far, -y_far, -d_far),
         (x_far, y_far, -d_far),
@@ -105,14 +103,14 @@ def build_frustum_pyramid_mesh(
     # Faces: near cap, 4 trapezoidal frustum sides, far cap
     faces = [
         # Near cap (facing backward)
-        (1, 2, 3, 4),
+        (0, 1, 2, 3),
         # 4 frustum sides
-        (1, 5, 6, 2),  # Bottom
-        (2, 6, 7, 3),  # Right
-        (3, 7, 8, 4),  # Top
-        (4, 8, 5, 1),  # Left
+        (0, 4, 5, 1),  # Bottom
+        (1, 5, 6, 2),  # Right
+        (2, 6, 7, 3),  # Top
+        (3, 7, 4, 0),  # Left
         # Far cap (facing forward)
-        (5, 8, 7, 6),
+        (4, 7, 6, 5),
     ]
 
     mesh = bpy.data.meshes.new(name)
@@ -120,23 +118,28 @@ def build_frustum_pyramid_mesh(
     mesh.update()
 
     obj = bpy.data.objects.new(name, mesh)
-    obj.display_type = "WIRE"
+    obj.display_type = "SOLID"
+    obj.color = (0.08, 0.85, 0.75, 0.18)
+    obj.show_transparent = True
     obj.show_wire = True
-    obj.show_in_front = True
+    obj.show_in_front = False
     obj.hide_render = True
 
     # Assign semi-transparent viewport material
     mat = bpy.data.materials.get(f"{name}_Mat")
     if mat is None:
         mat = bpy.data.materials.new(f"{name}_Mat")
-        mat.use_nodes = True
-        bsdf = mat.node_tree.nodes.get("Principled BSDF")
-        if bsdf:
-            bsdf.inputs["Base Color"].default_value = (0.08, 0.85, 0.75, 1.0)
-            if "Alpha" in bsdf.inputs:
-                bsdf.inputs["Alpha"].default_value = 0.25
-        if hasattr(mat, "blend_method"):
-            mat.blend_method = "BLEND"
+    mat.diffuse_color = obj.color
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    if bsdf:
+        bsdf.inputs["Base Color"].default_value = (0.08, 0.85, 0.75, 1.0)
+        bsdf.inputs["Alpha"].default_value = 0.18
+        bsdf.inputs["Roughness"].default_value = 0.6
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = "DITHERED"
+    elif hasattr(mat, "blend_method"):
+        mat.blend_method = "BLEND"
     obj.data.materials.append(mat)
 
     return obj
@@ -229,7 +232,10 @@ def setup_feeding_camera(
         frustum_obj = build_frustum_pyramid_mesh(
             focal_length_mm=focal_length,
             sensor_width_mm=sensor_w,
-            sensor_height_mm=sensor_h,
+            # Horizontal sensor fit derives vertical FOV from render aspect,
+            # including non-square pixels, just like pellet detection does.
+            sensor_height_mm=sensor_w * (render_h * scene.render.pixel_aspect_y)
+            / (render_w * scene.render.pixel_aspect_x),
             clip_start_m=clip_start,
             visual_distance_m=visual_distance,
             name="Feeding_Camera_Frustum",

@@ -8,6 +8,8 @@ import tempfile
 import unittest
 
 import bpy
+import bmesh
+from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 from sim2blender.blender.feeding_camera import (
@@ -84,10 +86,17 @@ class TestFeedingCamera(unittest.TestCase):
         self.assertEqual(scene.render.resolution_x, 1920)
         self.assertEqual(scene.render.resolution_y, 1080)
 
-        # Check frustum pyramid mesh (5 vertices: apex + 4 corners)
+        # Closed near/far clipped viewing volume, with translucent faces.
         self.assertIsNotNone(frustum_obj)
         self.assertEqual(frustum_obj.name, "Feeding_Camera_Frustum")
-        self.assertIn(len(frustum_obj.data.vertices), (5, 9))
+        self.assertEqual(len(frustum_obj.data.vertices), 8)
+        self.assertEqual(frustum_obj.display_type, "SOLID")
+        self.assertLess(frustum_obj.data.materials[0].diffuse_color[3], 1.0)
+        bm = bmesh.new()
+        bm.from_mesh(frustum_obj.data)
+        self.assertTrue(all(edge.is_manifold for edge in bm.edges))
+        self.assertGreater(bm.calc_volume(signed=True), 0.0)
+        bm.free()
         self.assertEqual(frustum_obj.parent, cam_obj)
 
         # Check HUD counter text
@@ -95,6 +104,23 @@ class TestFeedingCamera(unittest.TestCase):
         self.assertEqual(hud_obj.name, "Feeding_Camera_HUD")
         self.assertEqual(hud_obj.parent, cam_obj)
         self.assertIn("Pellets: 0", hud_obj.data.body)
+
+    def test_volume_matches_camera_projection(self):
+        scene = bpy.context.scene
+        scene.render.pixel_aspect_x = 1.2
+        for width, height in [(1920, 1080), (800, 1000)]:
+            cam, volume, _ = setup_feeding_camera({
+                "render_width": width, "render_height": height,
+                "sensor_height_mm": 15.0,
+            }, scene)
+            bpy.context.view_layer.update()
+            for vertex in volume.data.vertices:
+                projected = world_to_camera_view(scene, cam, volume.matrix_world @ vertex.co)
+                self.assertAlmostEqual(projected.x, round(projected.x), places=5)
+                self.assertAlmostEqual(projected.y, round(projected.y), places=5)
+                self.assertIn(round(projected.x), (0, 1))
+                self.assertIn(round(projected.y), (0, 1))
+                self.assertAlmostEqual(projected.z, -vertex.co.z, places=5)
 
     def test_pellet_counting_inside_and_outside_frustum(self):
         """Verify strict detection inside the pyramid volume (FHD aspect ratio, 2.5m range)."""

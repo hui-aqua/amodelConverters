@@ -15,7 +15,12 @@ sh "Start Sim2Blender.sh"
 
 The launcher creates `.venv-linux` and installs PySide6 on first use (internet
 required). It leaves any Windows `.venv` untouched. Subsequent launches reuse
-the Linux environment. To select another Python:
+the Linux environment.
+
+The launcher checks `python3`, versioned Python 3.11–3.14 executables on `PATH`,
+then Blender's bundled Python under `/opt`, `~/.local/opt`, and `~/Applications`.
+This also works when the system Python is older than 3.11. An explicit `PYTHON`
+overrides automatic discovery. For example:
 
 ```sh
 PYTHON=/usr/bin/python3.12 sh "Start Sim2Blender.sh"

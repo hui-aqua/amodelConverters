@@ -58,6 +58,11 @@ class RopeTests(unittest.TestCase):
         model=self.model();model.nodes[0].translate=(False,False,False)
         trajectory=[(2,0,i*.01) for i in range(10)]
         obj,lookup=create_rope_cloth(model,model.cells,bpy.context.scene.collection,10,{2:trajectory})
+        from sim2blender.blender.animation import action_fcurves
+        curves=list(action_fcurves(obj.data.shape_keys.animation_data.action))
+        self.assertEqual(len(curves),1)
+        self.assertTrue(all(key.interpolation=='LINEAR' for key in curves[0].keyframe_points))
+        self.assertAlmostEqual(curves[0].evaluate(1.25),2.5,places=5)
         samples=sample_node_motion(obj,lookup,10)
         for a,b in zip(samples[2],trajectory):self.assertLess((Vector(a)-Vector(b)).length,1e-5)
         self.assertTrue(all(Vector(p).length<1e-6 for p in samples[0]))

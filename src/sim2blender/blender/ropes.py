@@ -89,11 +89,10 @@ def create_rope_cloth(model,cells,collection,frames,owners):
             key.interpolation='KEY_LINEAR'
             keys.eval_time=key.frame
             keys.keyframe_insert('eval_time',frame=frame)
-        for layer in keys.animation_data.action.layers:
-            for strip in layer.strips:
-                for bag in strip.channelbags:
-                    for curve in bag.fcurves:
-                        for key in curve.keyframe_points:key.interpolation='LINEAR'
+        from sim2blender.blender.animation import action_fcurves
+        for curve in action_fcurves(keys.animation_data.action):
+            for key in curve.keyframe_points:
+                key.interpolation = 'LINEAR'
     cloth=obj.modifiers.new('Rope cloth','CLOTH')
     cloth.settings.quality=8
     cloth.settings.mass=.05

@@ -79,7 +79,8 @@ def main(argv=None):
         for step, key in enumerate(keys.key_blocks):
             keys.eval_time = key.frame
             keys.keyframe_insert('eval_time', frame=frames[step])
-        for curve in keys.animation_data.action.layers[0].strips[0].channelbag(keys.animation_data.action_slot).fcurves:
+        from sim2blender.blender.animation import action_fcurves
+        for curve in action_fcurves(keys.animation_data.action):
             for point in curve.keyframe_points: point.interpolation = 'LINEAR'
         if tag == 'membrane':
             wire = obj.modifiers.new('Finite element net strands', 'WIREFRAME')

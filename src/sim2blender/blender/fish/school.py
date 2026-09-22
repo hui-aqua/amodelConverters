@@ -95,12 +95,10 @@ def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.775, 
         if frame == 1 or frame % 20 == 0:
             print(f'Validated {fish_count} fish at frame {frame}/{frames}', flush=True)
     for obj in fish:
-        for layer in obj.animation_data.action.layers:
-            for strip in layer.strips:
-                for bag in strip.channelbags:
-                    for curve in bag.fcurves:
-                        for key in curve.keyframe_points:
-                            key.interpolation = 'CONSTANT'
+        from sim2blender.blender.animation import action_fcurves
+        for curve in action_fcurves(obj.animation_data.action):
+            for key in curve.keyframe_points:
+                key.interpolation = 'CONSTANT'
     scene['fish_count'] = fish_count
     scene['fish_length'] = fish_length
     scene['fish_seed'] = seed

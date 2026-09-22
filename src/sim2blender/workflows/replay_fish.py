@@ -81,12 +81,10 @@ def main(argv=None):
     for step,key in enumerate(keys.key_blocks):
         keys.eval_time = key.frame
         keys.keyframe_insert('eval_time', frame=frames[step])
-    for layer in keys.animation_data.action.layers:
-        for strip in layer.strips:
-            for bag in strip.channelbags:
-                for curve in bag.fcurves:
-                    for point in curve.keyframe_points:
-                        point.interpolation = 'LINEAR'
+    from sim2blender.blender.animation import action_fcurves
+    for curve in action_fcurves(keys.animation_data.action):
+        for point in curve.keyframe_points:
+            point.interpolation = 'LINEAR'
     print(f'Fish enclosure: {len(ids)} nodes, {len(faces)} faces, {len(caps)} virtual caps', flush=True)
     add_fish_school(cage, faces+caps, args.fish_count, scene.frame_end,
                     args.fish_length, args.speed, args.seed, advect=True,

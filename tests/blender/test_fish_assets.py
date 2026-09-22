@@ -89,6 +89,7 @@ class FishAssetTests(unittest.TestCase):
             load_fish_template(.6, self.path, 'SpeciesMesh')
 
 
-result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(FishAssetTests))
-if not result.wasSuccessful():
-    raise RuntimeError('Fish asset tests failed')
+if __name__ == '__main__':
+    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(FishAssetTests))
+    if not result.wasSuccessful():
+        raise RuntimeError('Fish asset tests failed')

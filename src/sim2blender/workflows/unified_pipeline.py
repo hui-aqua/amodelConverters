@@ -54,7 +54,12 @@ def build_unified_scene(config: dict) -> None:
     base_frames = int(config.get("frames", 120))
 
     env_cfg = config.get("environment") or config.get("water")
-    use_env = bool(env_cfg.get("enabled", True)) if isinstance(env_cfg, dict) else (env_cfg is not False)
+    if isinstance(env_cfg, dict):
+        use_env = bool(env_cfg.get("enabled", True))
+    elif isinstance(env_cfg, bool):
+        use_env = env_cfg
+    else:
+        use_env = False
 
     replay_cfg = config.get("replay")
     use_replay = bool(replay_cfg and replay_cfg.get("enabled", False))
@@ -104,7 +109,7 @@ def build_unified_scene(config: dict) -> None:
     faces = stitch_membrane_seams(faces, points)
 
     caps = []
-    if use_schooling or not use_replay:
+    if use_schooling or use_feeding or not use_replay:
         caps = boundary_caps(faces, points, cap_openings)
         # Validate enclosure geometry
         Enclosure(points, faces + caps).sample(random.Random(7), 0.5)
@@ -114,6 +119,11 @@ def build_unified_scene(config: dict) -> None:
     bpy.context.window.scene = scene
     collection = bpy.data.collections.new("AModel cage")
     scene.collection.children.link(collection)
+
+    if not use_env:
+        scene["hydrodynamics_active"] = False
+        scene["wave_height_m"] = 0.0
+        scene["current_speed_m_s"] = 0.0
 
     cage = mesh_object("Membrane cage", points, [], faces, collection)
     cage["source_file"] = str(model_path)
@@ -308,6 +318,11 @@ def build_unified_scene(config: dict) -> None:
             for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m", "wave_type", "jonswap_gamma", "wave_components", "wave_seed", "wave_spread_deg"):
                 if k in env_cfg and k not in feed_params:
                     feed_params[k] = env_cfg[k]
+        else:
+            feed_params["current_speed_m_s"] = 0.0
+            feed_params["current_direction_deg"] = 0.0
+            feed_params["wave_height_m"] = 0.0
+            feed_params["spreader_heave_rao"] = 0.0
         run_feed_animation(feed_params)
 
     # 4. Fish Schooling / Fish Feeding Interaction
@@ -323,6 +338,10 @@ def build_unified_scene(config: dict) -> None:
             for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m", "wave_type", "jonswap_gamma", "wave_components", "wave_seed", "wave_spread_deg"):
                 if k in env_cfg and k not in feeding_params:
                     feeding_params[k] = env_cfg[k]
+        else:
+            feeding_params["current_speed_m_s"] = 0.0
+            feeding_params["current_direction_deg"] = 0.0
+            feeding_params["wave_height_m"] = 0.0
         run_fish_feeding_animation(feeding_params)
     elif use_schooling:
         print("GUI_STAGE: Adding salmon / fish schooling…", flush=True)
@@ -332,6 +351,10 @@ def build_unified_scene(config: dict) -> None:
             for k in ("current_speed_m_s", "current_direction_deg", "wave_height_m", "wave_period_s", "wave_length_m", "wave_direction_deg", "water_level_m", "wave_type", "jonswap_gamma", "wave_components", "wave_seed", "wave_spread_deg"):
                 if k in env_cfg and k not in schooling_params:
                     schooling_params[k] = env_cfg[k]
+        else:
+            schooling_params["current_speed_m_s"] = 0.0
+            schooling_params["current_direction_deg"] = 0.0
+            schooling_params["wave_height_m"] = 0.0
         run_fish_schooling(schooling_params)
 
     # 4.5 Ocean Water & Wave/Current Environment (if not already initialized before cloth baking)

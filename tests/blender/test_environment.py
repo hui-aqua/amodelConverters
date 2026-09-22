@@ -292,8 +292,9 @@ class EnvironmentTests(unittest.TestCase):
         self.assertGreater(mean_dx, 0.2, f"Expected mean cloth deflection > 0.2m, got {mean_dx:.3f}m")
 
 
-suite = unittest.defaultTestLoader.loadTestsFromTestCase(EnvironmentTests)
-result = unittest.TextTestRunner(verbosity=2).run(suite)
-if not result.wasSuccessful():
-    raise RuntimeError("Environment tests failed")
+if __name__ == "__main__":
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(EnvironmentTests)
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    if not result.wasSuccessful():
+        raise RuntimeError("Environment tests failed")
 

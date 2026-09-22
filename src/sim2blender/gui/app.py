@@ -249,6 +249,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.opt_schooling.toggled.connect(lambda _: self.selection_changed())
         self.opt_feed = QCheckBox('Feeding')
         self.opt_feeding = QCheckBox('Fish feeding interaction')
+        self.opt_feeding.toggled.connect(lambda _: self.selection_changed())
         self.opt_camera = QCheckBox('Cinematic camera')
 
         stage_items = [
@@ -745,7 +746,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         ]
 
     def needs_enclosure(self):
-        return not self.opt_replay.isChecked() or self.opt_schooling.isChecked()
+        return not self.opt_replay.isChecked() or self.opt_schooling.isChecked() or self.opt_feeding.isChecked()
 
     def selection_changed(self):
         ids = self.selected_ids()
@@ -1111,7 +1112,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'spreader_move_obj': self.spreader_move_edit.text().strip(),
                     'spreader_still_obj': self.spreader_still_edit.text().strip(),
                     'spreader_z_offset': self.spreader_z_offset.value(),
-                    'spreader_heave_rao': self.spreader_heave_rao.value(),
+                    'spreader_heave_rao': self.spreader_heave_rao.value() if self.opt_env.isChecked() else 0.0,
                     'rpm': self.feed_rpm.value(),
                     'mass_flow_kg_min': self.feed_mass_flow.value(),
                     'visual_particle_mass_kg': self.feed_pellet_mass.value(),

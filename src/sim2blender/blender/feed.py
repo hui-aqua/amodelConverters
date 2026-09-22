@@ -416,15 +416,18 @@ def run_feed_animation(config: dict | None = None) -> None:
     gravity = float(cfg.get("gravity_m_s2", GRAVITY_M_S2))
 
     scene = bpy.context.scene
-    # Resolve hydrodynamics from config, falling back to scene properties if available
-    current_speed = float(cfg.get("current_speed_m_s", cfg.get("current_speed", scene.get("current_speed_m_s", 0.0))))
+    hydro_active = scene.get("hydrodynamics_active", True)
+    # Resolve hydrodynamics from config, falling back to scene properties if hydrodynamics are active
+    fallback_current = scene.get("current_speed_m_s", 0.0) if hydro_active else 0.0
+    fallback_wave_h = scene.get("wave_height_m", 0.0) if hydro_active else 0.0
+    current_speed = float(cfg.get("current_speed_m_s", cfg.get("current_speed", fallback_current)))
     current_dir_deg = float(cfg.get("current_direction_deg", cfg.get("current_dir_deg", scene.get("current_direction_deg", 0.0))))
-    wave_height = float(cfg.get("wave_height_m", cfg.get("wave_height", scene.get("wave_height_m", 0.0))))
+    wave_height = float(cfg.get("wave_height_m", cfg.get("wave_height", fallback_wave_h)))
     wave_period = float(cfg.get("wave_period_s", cfg.get("wave_period", scene.get("wave_period_s", 5.0))))
     wave_length = float(cfg.get("wave_length_m", cfg.get("wave_length", scene.get("wave_length_m", 30.0))))
     from sim2blender.core.waves import wave_options
     from sim2blender.blender.environment import calculate_wave_elevation
-    spectrum_options = wave_options({**wave_options(scene), **cfg})
+    spectrum_options = wave_options({**wave_options(scene), **cfg}) if hydro_active else {}
     wave_dir_deg = float(cfg.get("wave_direction_deg", cfg.get("wave_dir_deg", scene.get("wave_direction_deg", 0.0))))
 
     particle_rate = mass_flow_kg_min / 60.0 / visual_particle_mass_kg

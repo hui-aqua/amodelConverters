@@ -195,7 +195,11 @@ class PipelineJob:
             raise ValueError('The output filename must end in .blend.')
         if self.output.is_dir():
             raise ValueError('Choose an output file, not a folder.')
-        needs_enclosure = not (self.replay and self.replay.get('enabled')) or bool(self.fish_schooling and self.fish_schooling.get('enabled'))
+        needs_enclosure = (
+            not (self.replay and self.replay.get('enabled'))
+            or bool(self.fish_schooling and self.fish_schooling.get('enabled'))
+            or bool(self.fish_feeding and self.fish_feeding.get('enabled'))
+        )
         if needs_enclosure and not self.membrane_ids:
             raise ValueError('Select at least one enclosing membrane component.')
         if self.replay and self.replay.get('enabled'):

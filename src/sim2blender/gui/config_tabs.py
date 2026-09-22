@@ -447,6 +447,22 @@ class ConfigTabsMixin:
         fm.addRow('Rotating Rotor OBJ', self.path_row(self.spreader_move_edit, self.browse_spreader_move))
         self.spreader_still_edit = QLineEdit(default_still)
         fm.addRow('Stationary Base OBJ', self.path_row(self.spreader_still_edit, self.browse_spreader_still))
+
+        row_waterline = QHBoxLayout()
+        self.spreader_z_offset = QDoubleSpinBox()
+        self.spreader_z_offset.setRange(-10.0, 10.0)
+        self.spreader_z_offset.setDecimals(3)
+        self.spreader_z_offset.setSingleStep(0.05)
+        self.spreader_z_offset.setValue(0.52)
+        self.spreader_z_offset.setSuffix(' m')
+        self.spreader_z_offset.setToolTip('Vertical lift of the spreader model above the water line (0.52m for default model)')
+        row_waterline.addWidget(self.spreader_z_offset)
+
+        self.btn_visualize_waterline = QPushButton('Visualize in Blender 🌊')
+        self.btn_visualize_waterline.setToolTip('Open Blender to visualize and set the water line for this spreader model')
+        self.btn_visualize_waterline.clicked.connect(self.visualize_spreader_waterline)
+        row_waterline.addWidget(self.btn_visualize_waterline)
+        fm.addRow('Water Line Lift (Z)', row_waterline)
         v.addWidget(gb_models)
 
         gb_rotor = QGroupBox('Rotor Kinematics & Discharge Flow')
@@ -756,4 +772,20 @@ class ConfigTabsMixin:
             self.spreader_move_edit.setText(str(move_file))
         if still_file:
             self.spreader_still_edit.setText(str(still_file))
+
+        offset = 0.52 if "default" in p.name.lower() else 0.0
+        cfg_file = p / "config.json"
+        if cfg_file.is_file():
+            try:
+                import json
+                with open(cfg_file, "r", encoding="utf-8") as f:
+                    cfg_data = json.load(f)
+                    if "z_offset" in cfg_data:
+                        offset = float(cfg_data["z_offset"])
+                    elif "spreader_z_offset" in cfg_data:
+                        offset = float(cfg_data["spreader_z_offset"])
+            except Exception:
+                pass
+        if hasattr(self, "spreader_z_offset"):
+            self.spreader_z_offset.setValue(offset)
 

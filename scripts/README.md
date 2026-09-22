@@ -23,6 +23,7 @@ All optional animation and physics modules are implemented with their core logic
 | [`blender_aquasim_replay.py`](blender/blender_aquasim_replay.py) | `sim2blender.blender.replay` | Replaces cloth simulation with AquaSim results displacements (`out.txt`) using shape keys |
 | [`blender_fish_schooling.py`](blender/blender_fish_schooling.py) | `sim2blender.blender.fish.school` | Simulates boid salmon schooling contained within the 3D cage geometry |
 | [`blender_feed_animation.py`](blender/blender_feed_animation.py) | `sim2blender.blender.feed` | Imports spreader models (`spreader_move.obj`), animates rotor, and calculates air/water pellet trajectories |
+| [`blender_spreader_waterline.py`](blender/blender_spreader_waterline.py) | `sim2blender.blender.spreader_waterline` | Interactive 3D visualization and calibration of the feed spreader water line lift and waterline intersection |
 | [`blender_fish_feeding_animation.py`](blender/blender_fish_feeding_animation.py) | `sim2blender.blender.fish.feeding` | Simulates fish feeding behavior coupled with sinking feed pellets |
 | [`blender_cinematic_camera.py`](blender/blender_cinematic_camera.py) | `sim2blender.blender.camera` | Generates a 3-phase automated camera movement (aerial overview $\rightarrow$ spreader swoop $\rightarrow$ underwater dive) with autofocus DOF |
 

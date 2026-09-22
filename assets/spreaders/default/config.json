@@ -1,0 +1,6 @@
+{
+  "name": "Default Spreader",
+  "z_offset": 0.52,
+  "rpm": -30.0,
+  "mass_flow_kg_min": 30.0
+}

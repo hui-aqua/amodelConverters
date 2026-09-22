@@ -57,8 +57,9 @@ OUTWARD_SPEED_M_S = 1.0       # 径向向外抛洒速度 (m/s)
 DOWNWARD_SPEED_M_S = 0.001    # 向下垂直初速度 (m/s)
 RANDOM_SEED = 30030           # 随机散射种子
 
-# 双介质流体物性参数
+# 双介质流体物性与撒料机吃水线参数
 WATER_LEVEL_Z = 0.0           # 水面高度 (米, Z <= 0 为水下)
+SPREADER_Z_OFFSET = 0.52      # 撒料机吃水线/Z轴抬升高度 (米, 默认抬高0.52m)
 PELLET_DENSITY_KG_M3 = 1100.0 # 饲料颗粒密度 (kg/m³)
 AIR_DRAG_COEFF = 0.47         # 空气阻力系数
 WATER_DRAG_COEFF = 0.85       # 水中阻力系数
@@ -87,6 +88,7 @@ def main() -> None:
         "downward_speed_m_s": DOWNWARD_SPEED_M_S,
         "random_seed": RANDOM_SEED,
         "water_level_z": WATER_LEVEL_Z,
+        "spreader_z_offset": SPREADER_Z_OFFSET,
         "pellet_density_kg_m3": PELLET_DENSITY_KG_M3,
         "air_drag_coeff": AIR_DRAG_COEFF,
         "water_drag_coeff": WATER_DRAG_COEFF,

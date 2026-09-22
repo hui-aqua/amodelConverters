@@ -33,6 +33,7 @@ DEFAULT_FEED_CONFIG = {
     "gravity_m_s2": 9.81,
     "random_seed": 30030,
     "water_level_z": 0.0,
+    "spreader_z_offset": 0.52,
     "pellet_density_kg_m3": 1100.0,
     "air_density_kg_m3": 1.225,
     "water_density_kg_m3": 1000.0,
@@ -54,6 +55,7 @@ DOWNWARD_SPEED_M_S = DEFAULT_FEED_CONFIG["downward_speed_m_s"]
 GRAVITY_M_S2 = DEFAULT_FEED_CONFIG["gravity_m_s2"]
 RANDOM_SEED = DEFAULT_FEED_CONFIG["random_seed"]
 WATER_LEVEL_Z = DEFAULT_FEED_CONFIG["water_level_z"]
+SPREADER_Z_OFFSET = DEFAULT_FEED_CONFIG["spreader_z_offset"]
 PELLET_DENSITY_KG_M3 = DEFAULT_FEED_CONFIG["pellet_density_kg_m3"]
 AIR_DENSITY_KG_M3 = DEFAULT_FEED_CONFIG["air_density_kg_m3"]
 WATER_DENSITY_KG_M3 = DEFAULT_FEED_CONFIG["water_density_kg_m3"]
@@ -80,8 +82,11 @@ def import_obj_file(filepath: str | Path) -> list[bpy.types.Object]:
 def find_or_import_spreader_move_object(
     move_obj_path: str | Path | None = None,
     still_obj_path: str | Path | None = None,
+    z_offset: float = SPREADER_Z_OFFSET,
+    water_level_z: float = WATER_LEVEL_Z,
 ) -> bpy.types.Object:
-    """Find existing 'spreader_move' or import from obj paths."""
+    """Find existing 'spreader_move' or import from obj paths, applying waterline Z offset."""
+    total_z = float(water_level_z) + float(z_offset)
     obj = bpy.data.objects.get("spreader_move")
     if obj is not None:
         return obj
@@ -113,6 +118,7 @@ def find_or_import_spreader_move_object(
         for o in imported_still:
             if o.type == "MESH":
                 o.name = "spreader_still"
+                o.location.z = total_z
 
     move_p = _resolve_spreader(move_obj_path, DEFAULT_SPREADER_MOVE_PATH)
     if move_p.is_file():
@@ -120,6 +126,7 @@ def find_or_import_spreader_move_object(
         for o in imported_move:
             if o.type == "MESH":
                 o.name = "spreader_move"
+                o.location.z = total_z
                 return o
 
     obj = bpy.data.objects.get("spreader_move")
@@ -138,7 +145,7 @@ def find_spreader_outlet_tip(spreader_obj: bpy.types.Object) -> Vector:
     """Determine the outlet tip coordinates from the spreader_move geometry."""
     outlet_obj = bpy.data.objects.get("FishFeed_Outlet_30kgmin")
     if outlet_obj is not None:
-        return outlet_obj.location.copy()
+        return outlet_obj.matrix_world.translation.copy()
 
     if spreader_obj.type == "MESH" and spreader_obj.data.vertices:
         matrix = spreader_obj.matrix_world
@@ -393,7 +400,9 @@ def run_feed_animation(config: dict | None = None) -> None:
     outward_speed = float(cfg.get("outward_speed_m_s", OUTWARD_SPEED_M_S))
     downward_speed = float(cfg.get("downward_speed_m_s", DOWNWARD_SPEED_M_S))
     seed = int(cfg.get("random_seed", RANDOM_SEED))
-    water_level_z = float(cfg.get("water_level_z", WATER_LEVEL_Z))
+    water_level_z = float(cfg.get("water_level_z", cfg.get("water_level_m", WATER_LEVEL_Z)))
+    spreader_z_offset = float(cfg.get("spreader_z_offset", SPREADER_Z_OFFSET))
+    total_z_offset = water_level_z + spreader_z_offset
     pellet_density = float(cfg.get("pellet_density_kg_m3", PELLET_DENSITY_KG_M3))
     air_density = float(cfg.get("air_density_kg_m3", AIR_DENSITY_KG_M3))
     water_density = float(cfg.get("water_density_kg_m3", WATER_DENSITY_KG_M3))
@@ -426,7 +435,23 @@ def run_feed_animation(config: dict | None = None) -> None:
 
     rotor = bpy.data.objects.get("Feed_Rotor_30RPM")
     if rotor is None:
-        spreader_move = find_or_import_spreader_move_object(spreader_move_path, spreader_still_path)
+        spreader_move = find_or_import_spreader_move_object(
+            spreader_move_path,
+            spreader_still_path,
+            z_offset=spreader_z_offset,
+            water_level_z=water_level_z,
+        )
+        still_obj = bpy.data.objects.get("spreader_still")
+        if still_obj is not None:
+            if still_obj.parent is not None:
+                still_obj.parent = None
+            still_obj.location = (0.0, 0.0, total_z_offset)
+
+        if spreader_move.parent is not None:
+            spreader_move.parent = None
+        spreader_move.location = (0.0, 0.0, total_z_offset)
+        bpy.context.view_layer.update()
+
         tip = find_spreader_outlet_tip(spreader_move)
 
         system_collection = bpy.data.collections.get("Feed_Animation_30RPM_30kgmin")
@@ -438,6 +463,7 @@ def run_feed_animation(config: dict | None = None) -> None:
         rotor.empty_display_type = "ARROWS"
         rotor.empty_display_size = 0.12
         rotor.show_in_front = True
+        rotor.location = (0.0, 0.0, total_z_offset)
         system_collection.objects.link(rotor)
 
         spreader_world = spreader_move.matrix_world.copy()
@@ -450,8 +476,14 @@ def run_feed_animation(config: dict | None = None) -> None:
         outlet.show_in_front = True
         outlet.location = tip
         outlet.rotation_euler.y = math.pi / 2.0
-        outlet.parent = rotor
         system_collection.objects.link(outlet)
+        bpy.context.view_layer.update()
+
+        outlet_world = outlet.matrix_world.copy()
+        outlet.parent = rotor
+        outlet.matrix_world = outlet_world
+        bpy.context.view_layer.update()
+
         outlet["mass_flow_kg_min"] = mass_flow_kg_min
         outlet["visual_particle_mass_kg"] = visual_particle_mass_kg
         outlet["particle_rate_per_second"] = particle_rate
@@ -460,7 +492,7 @@ def run_feed_animation(config: dict | None = None) -> None:
         outlet = bpy.data.objects.get("FishFeed_Outlet_30kgmin")
         if system_collection is None or outlet is None:
             raise RuntimeError("The existing feed setup is incomplete")
-        tip = outlet.location.copy()
+        tip = outlet.matrix_world.translation.copy()
 
     rotor["rotation_rpm"] = rpm
     rotor["angular_speed_rad_s"] = angular_speed
@@ -581,6 +613,8 @@ def run_feed_animation(config: dict | None = None) -> None:
     scene["feed_particle_count"] = particle_count
     scene["feed_current_speed_m_s"] = current_speed
     scene["feed_wave_height_m"] = wave_height
+    scene["feed_spreader_z_offset"] = spreader_z_offset
+    scene["feed_water_level_z"] = water_level_z
 
     print(
         "FEED_ANIMATION_DONE",
@@ -589,5 +623,6 @@ def run_feed_animation(config: dict | None = None) -> None:
         "COUNT", particle_count,
         "CURRENT_SPEED", current_speed,
         "WAVE_HEIGHT", wave_height,
+        "SPREADER_Z_OFFSET", spreader_z_offset,
         "OUTLET", tuple(round(v, 5) for v in tip),
     )

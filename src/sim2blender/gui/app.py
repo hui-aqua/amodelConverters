@@ -874,6 +874,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.opt_feed.setChecked(self.settings.value('opt_feed', False, type=bool))
         self.spreader_move_edit.setText(self.settings.value('spreader_move', str(PROJECT_ROOT / 'assets/spreaders/default/spreader_move.obj')))
         self.spreader_still_edit.setText(self.settings.value('spreader_still', str(PROJECT_ROOT / 'assets/spreaders/default/spreader_still.obj')))
+        self.spreader_z_offset.setValue(self.settings.value('spreader_z_offset', 0.52, type=float))
         self.feed_rpm.setValue(self.settings.value('feed_rpm', -30.0, type=float))
         self.feed_mass_flow.setValue(self.settings.value('feed_mass_flow', 30.0, type=float))
         self.feed_pellet_mass.setValue(self.settings.value('feed_pellet_mass', 0.01, type=float))
@@ -975,6 +976,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.settings.setValue('opt_feed', self.opt_feed.isChecked())
         self.settings.setValue('spreader_move', self.spreader_move_edit.text())
         self.settings.setValue('spreader_still', self.spreader_still_edit.text())
+        self.settings.setValue('spreader_z_offset', self.spreader_z_offset.value())
         self.settings.setValue('feed_rpm', self.feed_rpm.value())
         self.settings.setValue('feed_mass_flow', self.feed_mass_flow.value())
         self.settings.setValue('feed_pellet_mass', self.feed_pellet_mass.value())
@@ -1097,6 +1099,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'enabled': True,
                     'spreader_move_obj': self.spreader_move_edit.text().strip(),
                     'spreader_still_obj': self.spreader_still_edit.text().strip(),
+                    'spreader_z_offset': self.spreader_z_offset.value(),
                     'rpm': self.feed_rpm.value(),
                     'mass_flow_kg_min': self.feed_mass_flow.value(),
                     'visual_particle_mass_kg': self.feed_pellet_mass.value(),
@@ -1295,6 +1298,37 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             ok, _ = QProcess.startDetached(str(self.last_blender), [str(self.last_output)], str(PROJECT_ROOT))
             if not ok:
                 QMessageBox.warning(self, 'Could not open Blender', 'Check the Blender installation and try again.')
+
+    def visualize_spreader_waterline(self):
+        blender_path = (self.blender_edit.text().strip() if hasattr(self, 'blender_edit') else '') or find_blender()
+        if not blender_path or not Path(blender_path).is_file():
+            QMessageBox.warning(self, 'Blender Not Found', 'Please configure the Blender executable path in Advanced settings.')
+            return
+
+        script_path = PROJECT_ROOT / 'scripts' / 'blender' / 'blender_spreader_waterline.py'
+        if not script_path.is_file():
+            QMessageBox.warning(self, 'Script Not Found', f'Could not find {script_path}')
+            return
+
+        move_obj = self.spreader_move_edit.text().strip() if hasattr(self, 'spreader_move_edit') else ''
+        still_obj = self.spreader_still_edit.text().strip() if hasattr(self, 'spreader_still_edit') else ''
+        z_offset = str(self.spreader_z_offset.value() if hasattr(self, 'spreader_z_offset') else 0.52)
+        water_level = str(self.feed_water_level.value() if hasattr(self, 'feed_water_level') else 0.0)
+
+        args = [
+            '--python', str(script_path),
+            '--',
+            '--move-obj', move_obj,
+            '--still-obj', still_obj,
+            '--z-offset', z_offset,
+            '--water-level', water_level,
+        ]
+
+        ok, _ = QProcess.startDetached(str(blender_path), args, str(PROJECT_ROOT))
+        if ok:
+            self.status.setText(f'Launched Blender for spreader waterline calibration (Lift: +{z_offset} m)')
+        else:
+            QMessageBox.warning(self, 'Launch Failed', 'Could not launch Blender for waterline calibration.')
 
     def open_folder(self):
         if self.job:

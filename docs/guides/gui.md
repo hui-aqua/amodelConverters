@@ -53,3 +53,11 @@ Replay uses every exported structural sample. There is no model-only frame count
 - Existing output scenes require replacement confirmation. Use a new filename to preserve variants.
 
 Opening the result does not start a render. Press Space in Blender's Timeline to play, use Material Preview or Rendered shading to see net openings, and F12 to render a still.
+
+## Pre-Build 3D Model & Color Check
+
+Before running a simulation build (which may take several minutes to bake cloth, particles, and hydrodynamics), click **Check Models & Colors 🔍** in Column 3 above the build button:
+- **Instant Lightweight Preview**: Launches interactive Blender in ~1-2 seconds with the reference cage geometry, water level plane, and all imported OBJ models (spreader rotor/base and any extra OBJ equipment).
+- **Verify Positioning & Elevation**: Check whether models sit at the correct coordinates and waterline elevation.
+- **Verify Materials & Colors**: Renders in Material Preview (EEVEE) with 3-point studio lighting; missing texture files or invalid materials are automatically reported.
+- **Model Inspector N-Panel**: In Blender's 3D View (`N` key -> `Sim2Blender` -> `Model & Color Inspector`), view bounding dimensions, live-adjust $(X, Y, Z)$ positions, focus the camera, and copy calibrated coordinates to the clipboard.

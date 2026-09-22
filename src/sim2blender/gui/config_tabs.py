@@ -4,7 +4,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QFormLayout,
-    QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton
+    QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton,
+    QListWidget, QFileDialog
 )
 
 from pathlib import Path
@@ -502,6 +503,31 @@ class ConfigTabsMixin:
 
         v.addWidget(gb_models)
 
+        gb_extra = QGroupBox('Additional 3D Models & Equipment (OBJ)')
+        fe = QVBoxLayout(gb_extra)
+        lbl_extra = QLabel('Import and verify additional OBJ equipment (buoys, pipes, sensors, etc.):')
+        lbl_extra.setStyleSheet('font-size: 11px; color: #536875;')
+        fe.addWidget(lbl_extra)
+
+        self.extra_obj_list = QListWidget()
+        self.extra_obj_list.setFixedHeight(68)
+        fe.addWidget(self.extra_obj_list)
+
+        r_btns = QHBoxLayout()
+        btn_add_obj = QPushButton('+ Add OBJ Model…')
+        btn_add_obj.setStyleSheet('padding: 3px 8px; font-size: 11px;')
+        btn_add_obj.clicked.connect(self.add_extra_obj_model)
+        r_btns.addWidget(btn_add_obj)
+
+        btn_rem_obj = QPushButton('- Remove Selected')
+        btn_rem_obj.setStyleSheet('padding: 3px 8px; font-size: 11px;')
+        btn_rem_obj.clicked.connect(self.remove_extra_obj_model)
+        r_btns.addWidget(btn_rem_obj)
+        r_btns.addStretch()
+        fe.addLayout(r_btns)
+
+        v.addWidget(gb_extra)
+
         gb_rotor = QGroupBox('Rotor Kinematics & Discharge Flow')
         fr = QFormLayout(gb_rotor)
         r_flow = QHBoxLayout()
@@ -944,4 +970,39 @@ class ConfigTabsMixin:
                 pass
         if hasattr(self, "spreader_z_offset"):
             self.spreader_z_offset.setValue(offset)
+
+    def add_extra_obj_model(self):
+        """Browse and add an arbitrary OBJ model to the inspection list."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Select 3D Model (OBJ)',
+            str(PROJECT_ROOT / 'assets'),
+            'Wavefront OBJ (*.obj);;All files (*)'
+        )
+        if path:
+            self.extra_obj_list.addItem(path)
+            if hasattr(self, 'update_check_models_button_state'):
+                self.update_check_models_button_state()
+
+    def remove_extra_obj_model(self):
+        """Remove the selected OBJ model from the inspection list."""
+        for item in self.extra_obj_list.selectedItems():
+            self.extra_obj_list.takeItem(self.extra_obj_list.row(item))
+        if hasattr(self, 'update_check_models_button_state'):
+            self.update_check_models_button_state()
+
+    def get_extra_obj_models(self) -> list[dict]:
+        """Return list of extra OBJ descriptors for model preview."""
+        models = []
+        if hasattr(self, 'extra_obj_list'):
+            for i in range(self.extra_obj_list.count()):
+                item_text = self.extra_obj_list.item(i).text().strip()
+                if item_text and Path(item_text).is_file():
+                    p = Path(item_text)
+                    models.append({
+                        'path': str(p.resolve()),
+                        'name': p.stem,
+                        'position': [0.0, 0.0, 0.0],
+                        'rotation': [0.0, 0.0, 0.0],
+                    })
+        return models
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import codecs
 import hashlib
+import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -385,6 +387,14 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
 
         actions_box = QVBoxLayout()
         actions_box.setSpacing(8)
+
+        self.check_models_button = QPushButton('Check Models & Colors 🔍')
+        self.check_models_button.setObjectName('CheckModels')
+        self.check_models_button.setEnabled(False)
+        self.check_models_button.setToolTip('Preview imported OBJ models and cage in Blender to verify position, scale, materials, and colors before running full scene build')
+        self.check_models_button.clicked.connect(self.check_models_preview)
+        actions_box.addWidget(self.check_models_button)
+
         self.build_button = QPushButton('Build Blender scene')
         self.build_button.setObjectName('Primary')
         self.build_button.setEnabled(False)
@@ -436,7 +446,9 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             QPlainTextEdit { background: #132733; color: #dce9ef; border-radius: 6px;
                             padding: 8px; font-family: Consolas; font-size: 11px; }
             QPushButton { background: #e3edf2; border: 1px solid #c9d9e2; border-radius: 4px; padding: 6px 12px; }
-            QPushButton:hover { background: #d3e5ee; }
+            QPushButton#CheckModels { background: #1a5b6e; color: white; font-weight: 600; padding: 8px 16px; font-size: 13px; border-radius: 4px; }
+            QPushButton#CheckModels:hover { background: #23748c; }
+            QPushButton#CheckModels:disabled { background: #e4e9ec; color: #8998a1; }
             QPushButton#Primary { background: #087e8b; color: white; font-weight: 600; padding: 10px 20px; font-size: 14px; }
             QPushButton:disabled { background: #e4e9ec; color: #8998a1; }
             QProgressBar { background: white; color: #192d3b; border: 1px solid #c6d5de;
@@ -666,6 +678,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.warning.clear()
         self._update_beam_truss_toggle_text()
         self.build_button.setEnabled(False)
+        self.update_check_models_button_state()
         self.model_summary.setText('Waiting to inspect model…')
         self.load_timer.start()
 
@@ -781,6 +794,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             ready = ready and (self.results_info is not None)
 
         self.build_button.setEnabled(bool(ready and not self.running))
+        self.update_check_models_button_state()
         if not self.running:
             self.status.setText('Ready to build' if ready else 'Select a valid results file' if self.opt_replay.isChecked() and self.results_info is None else 'Choose enclosing components')
 
@@ -1282,6 +1296,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.main_split.widget(0).setEnabled(not value)
         self.main_split.widget(1).setEnabled(not value)
         self.build_button.setEnabled(not value and self.info is not None and (not self.needs_enclosure() or bool(self.selected_ids())))
+        self.update_check_models_button_state()
         self.cancel_button.setEnabled(value)
         self.open_button.setEnabled(not value and self.last_output is not None)
         self.folder_button.setEnabled(not value and self.job is not None)
@@ -1404,6 +1419,123 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             self.status.setText(f'Launched Blender for spreader waterline calibration (Lift: +{z_offset} m)')
         else:
             QMessageBox.warning(self, 'Launch Failed', 'Could not launch Blender for waterline calibration.')
+
+    def update_check_models_button_state(self):
+        """Enable the Check Models button if an AquaSim model or OBJ model is available."""
+        has_model = bool(self.model.text().strip() and Path(self.model.text().strip()).is_file())
+        has_spreader = bool(
+            (hasattr(self, 'spreader_move_edit') and self.spreader_move_edit.text().strip() and Path(self.spreader_move_edit.text().strip()).is_file()) or
+            (hasattr(self, 'spreader_still_edit') and self.spreader_still_edit.text().strip() and Path(self.spreader_still_edit.text().strip()).is_file())
+        )
+        has_extra = bool(hasattr(self, 'get_extra_obj_models') and self.get_extra_obj_models())
+        ready = bool(has_model or has_spreader or has_extra)
+        if hasattr(self, 'check_models_button'):
+            self.check_models_button.setEnabled(ready and not self.running)
+
+    def check_models_preview(self):
+        """Perform pre-build diagnostic check on all 3D models and launch interactive Blender preview."""
+        blender_path = (
+            (self.blender.text().strip() if hasattr(self, 'blender') else '') or
+            (self.blender_edit.text().strip() if hasattr(self, 'blender_edit') else '') or
+            find_blender()
+        )
+        if not blender_path or not Path(blender_path).is_file():
+            QMessageBox.warning(self, 'Blender Not Found', 'Please configure the Blender executable path in Advanced settings.')
+            return
+
+        script_path = PROJECT_ROOT / 'scripts' / 'blender' / 'blender_model_preview.py'
+        if not script_path.is_file():
+            QMessageBox.warning(self, 'Script Not Found', f'Could not find {script_path}')
+            return
+
+        model_path = self.model.text().strip()
+        has_cage = bool(model_path and Path(model_path).is_file())
+
+        water_level = float(self.feed_water_level.value() if hasattr(self, 'feed_water_level') else (
+            self.env_water_level.value() if hasattr(self, 'env_water_level') else 0.0
+        ))
+        spreader_lift = float(self.spreader_z_offset.value() if hasattr(self, 'spreader_z_offset') else 0.52)
+        total_spreader_z = water_level + spreader_lift
+
+        obj_models = []
+        # 1. Spreader rotor
+        move_obj = self.spreader_move_edit.text().strip() if hasattr(self, 'spreader_move_edit') else ''
+        if move_obj and Path(move_obj).is_file():
+            obj_models.append({
+                'path': str(Path(move_obj).resolve()),
+                'name': 'Spreader_Rotor',
+                'position': [0.0, 0.0, total_spreader_z],
+                'rotation': [0.0, 0.0, 0.0],
+            })
+
+        # 2. Spreader stationary base
+        still_obj = self.spreader_still_edit.text().strip() if hasattr(self, 'spreader_still_edit') else ''
+        if still_obj and Path(still_obj).is_file():
+            obj_models.append({
+                'path': str(Path(still_obj).resolve()),
+                'name': 'Spreader_Base',
+                'position': [0.0, 0.0, total_spreader_z],
+                'rotation': [0.0, 0.0, 0.0],
+            })
+
+        # 3. Additional custom OBJ models
+        if hasattr(self, 'get_extra_obj_models'):
+            obj_models.extend(self.get_extra_obj_models())
+
+        if not has_cage and not obj_models:
+            QMessageBox.information(
+                self, 'No 3D Models Configured',
+                'Please select an AquaSim model (.amodel) or configure OBJ models to preview.'
+            )
+            return
+
+        # Pre-flight diagnostic report to GUI log
+        self.log.appendPlainText('=' * 60)
+        self.log.appendPlainText('SIM2BLENDER 3D MODEL PRE-BUILD CHECK & PREVIEW')
+        self.log.appendPlainText('=' * 60)
+        if has_cage:
+            ids = self.selected_ids() if hasattr(self, 'selected_ids') else []
+            self.log.appendPlainText(f'AquaSim Model: {Path(model_path).name} (Membranes: {ids or "All"})')
+        else:
+            self.log.appendPlainText('AquaSim Model: None selected (checking OBJ assets standalone)')
+
+        self.log.appendPlainText(f'Water Level: Z = {water_level:.2f} m')
+        self.log.appendPlainText(f'Configured OBJ Models ({len(obj_models)}):')
+        for m in obj_models:
+            p = Path(m['path'])
+            mtl = p.with_suffix('.mtl')
+            mtl_status = 'Found' if mtl.is_file() else 'None (default shading)'
+            self.log.appendPlainText(f"  • {m['name']}: {p.name} (MTL: {mtl_status}) at {m['position']}")
+
+        self.log.appendPlainText('Launching interactive Blender 3D Model Inspector…')
+        self.log.appendPlainText('=' * 60)
+
+        # Write config JSON
+        preview_cfg = {
+            'model_path': str(Path(model_path).resolve()) if has_cage else None,
+            'membrane_ids': self.selected_ids() if hasattr(self, 'selected_ids') else None,
+            'water_level_z': water_level,
+            'include_water': True,
+            'obj_models': obj_models,
+            'setup_ui': True,
+            'setup_lighting': True,
+        }
+
+        import tempfile
+        cfg_path = Path(tempfile.gettempdir()) / f"sim2blender_preview_config_{os.getpid()}.json"
+        cfg_path.write_text(json.dumps(preview_cfg, indent=2), encoding='utf-8')
+
+        args = [
+            '--python', str(script_path),
+            '--',
+            '--config', str(cfg_path),
+        ]
+
+        ok, _ = QProcess.startDetached(str(blender_path), args, str(PROJECT_ROOT))
+        if ok:
+            self.status.setText(f'Launched Blender 3D Model Inspector ({len(obj_models)} OBJs + cage)')
+        else:
+            QMessageBox.warning(self, 'Launch Failed', 'Could not launch Blender for 3D model preview.')
 
     def open_folder(self):
         if self.job:

@@ -251,6 +251,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.opt_feeding = QCheckBox('Fish feeding interaction')
         self.opt_feeding.toggled.connect(lambda _: self.selection_changed())
         self.opt_camera = QCheckBox('Cinematic camera')
+        self.opt_feeding_camera = QCheckBox('Feeding camera')
 
         stage_items = [
             (self.opt_env, 0, 'Water surface at Z=0 & calm sea wave/current hydrodynamics'),
@@ -259,6 +260,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             (self.opt_feed, 3, 'Spreader rotor (30 RPM) & ballistic feed pellets'),
             (self.opt_feeding, 4, 'Coupled schooling & feed pellet consumption'),
             (self.opt_camera, 5, 'Multi-phase cinematic tracking camera'),
+            (self.opt_feeding_camera, 6, 'Fixed underwater camera with pyramid frustum volume to count passing feed pellets'),
         ]
 
         for cb, tab_idx, hint in stage_items:
@@ -350,6 +352,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self._build_tab_feed()
         self._build_tab_feeding()
         self._build_tab_camera()
+        self._build_tab_feeding_camera()
 
 
         # =============================================================
@@ -414,6 +417,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.opt_feed.toggled.connect(self.update_tab_headers)
         self.opt_feeding.toggled.connect(self.update_tab_headers)
         self.opt_camera.toggled.connect(self.update_tab_headers)
+        self.opt_feeding_camera.toggled.connect(self.update_tab_headers)
 
         self.setStyleSheet('''
             QMainWindow, QWidget#AppRoot, QWidget#FormPanel, QWidget#StatusPanel,
@@ -452,6 +456,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             (self.opt_feed, 3),
             (self.opt_feeding, 4),
             (self.opt_camera, 5),
+            (self.opt_feeding_camera, 6),
         ]
         for cb, idx in stages:
             if idx == index:
@@ -469,6 +474,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             (self.opt_feed, 3, '🌀 Feeding'),
             (self.opt_feeding, 4, '🍴 Interaction'),
             (self.opt_camera, 5, '🎥 Camera'),
+            (self.opt_feeding_camera, 6, '📷 Feeding Camera'),
         ]
         active_count = 0
         first_visible_idx = -1
@@ -919,6 +925,20 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.camera_phase1_pct.setValue(self.settings.value('camera_phase1_pct', 0.35, type=float))
         self.camera_phase2_pct.setValue(self.settings.value('camera_phase2_pct', 0.60, type=float))
 
+        # Feeding Camera
+        self.opt_feeding_camera.setChecked(self.settings.value('opt_feeding_camera', False, type=bool))
+        self.feedcam_pos_x.setValue(self.settings.value('feedcam_pos_x', 2.5, type=float))
+        self.feedcam_pos_y.setValue(self.settings.value('feedcam_pos_y', 0.0, type=float))
+        self.feedcam_pos_z.setValue(self.settings.value('feedcam_pos_z', -5.0, type=float))
+        self.feedcam_target_x.setValue(self.settings.value('feedcam_target_x', 0.0, type=float))
+        self.feedcam_target_y.setValue(self.settings.value('feedcam_target_y', 0.0, type=float))
+        self.feedcam_target_z.setValue(self.settings.value('feedcam_target_z', -5.0, type=float))
+        self.feedcam_visual_dist.setValue(self.settings.value('feedcam_visual_dist', 2.5, type=float))
+        self.feedcam_clip_start.setValue(self.settings.value('feedcam_clip_start', 0.1, type=float))
+        self.feedcam_focal_length.setValue(self.settings.value('feedcam_focal_length', 32.0, type=float))
+        self.feedcam_show_frustum.setChecked(self.settings.value('feedcam_show_frustum', True, type=bool))
+        self.feedcam_show_counter.setChecked(self.settings.value('feedcam_show_counter', True, type=bool))
+
         self.update_tab_headers()
 
     def _save_current_settings(self):
@@ -1022,6 +1042,19 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.settings.setValue('camera_water_depth', self.camera_water_depth.value())
         self.settings.setValue('camera_phase1_pct', self.camera_phase1_pct.value())
         self.settings.setValue('camera_phase2_pct', self.camera_phase2_pct.value())
+
+        self.settings.setValue('opt_feeding_camera', self.opt_feeding_camera.isChecked())
+        self.settings.setValue('feedcam_pos_x', self.feedcam_pos_x.value())
+        self.settings.setValue('feedcam_pos_y', self.feedcam_pos_y.value())
+        self.settings.setValue('feedcam_pos_z', self.feedcam_pos_z.value())
+        self.settings.setValue('feedcam_target_x', self.feedcam_target_x.value())
+        self.settings.setValue('feedcam_target_y', self.feedcam_target_y.value())
+        self.settings.setValue('feedcam_target_z', self.feedcam_target_z.value())
+        self.settings.setValue('feedcam_visual_dist', self.feedcam_visual_dist.value())
+        self.settings.setValue('feedcam_clip_start', self.feedcam_clip_start.value())
+        self.settings.setValue('feedcam_focal_length', self.feedcam_focal_length.value())
+        self.settings.setValue('feedcam_show_frustum', self.feedcam_show_frustum.isChecked())
+        self.settings.setValue('feedcam_show_counter', self.feedcam_show_counter.isChecked())
         self.settings.sync()
 
     def start_build(self):
@@ -1165,6 +1198,30 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'phase2_percent': self.camera_phase2_pct.value(),
                 }
 
+            feeding_camera_dict = None
+            if self.opt_feeding_camera.isChecked():
+                feeding_camera_dict = {
+                    'enabled': True,
+                    'position': [
+                        self.feedcam_pos_x.value(),
+                        self.feedcam_pos_y.value(),
+                        self.feedcam_pos_z.value(),
+                    ],
+                    'target': [
+                        self.feedcam_target_x.value(),
+                        self.feedcam_target_y.value(),
+                        self.feedcam_target_z.value(),
+                    ],
+                    'visual_distance_m': self.feedcam_visual_dist.value(),
+                    'clip_start_m': self.feedcam_clip_start.value(),
+                    'focal_length_mm': self.feedcam_focal_length.value(),
+                    'aspect_ratio': [16, 9],
+                    'render_width': 1920,
+                    'render_height': 1080,
+                    'show_frustum': self.feedcam_show_frustum.isChecked(),
+                    'show_counter': self.feedcam_show_counter.isChecked(),
+                }
+
             job = PipelineJob(
                 blender=Path(self.blender.text().strip()),
                 model=self.info.path,
@@ -1181,6 +1238,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                 feed_animation=feed_dict,
                 fish_feeding=feeding_dict,
                 cinematic_camera=camera_dict,
+                feeding_camera=feeding_camera_dict,
             )
 
             program, args = job.command()

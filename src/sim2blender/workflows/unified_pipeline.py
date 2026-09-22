@@ -76,6 +76,9 @@ def build_unified_scene(config: dict) -> None:
     camera_cfg = config.get("cinematic_camera")
     use_camera = bool(camera_cfg and camera_cfg.get("enabled", False))
 
+    feeding_cam_cfg = config.get("feeding_camera")
+    use_feeding_camera = bool(feeding_cam_cfg and feeding_cam_cfg.get("enabled", False))
+
 
     # 1. Read AquaSim model and extract membrane geometry
     print(f"GUI_STAGE: Reading AquaSim model {model_path.name}…", flush=True)
@@ -407,6 +410,15 @@ def build_unified_scene(config: dict) -> None:
         from sim2blender.blender.camera import setup_cinematic_camera
         setup_cinematic_camera(camera_cfg)
 
+    # 5.5 Fixed Feeding Camera & Pyramid Frustum Pellet Counting
+    if use_feeding_camera:
+        print("GUI_STAGE: Setting up fixed feeding camera and counting pellet passages…", flush=True)
+        from sim2blender.blender.feeding_camera import setup_feeding_camera, count_pellets_in_frustum
+        feed_cam_obj, feed_cam_frustum, feed_cam_hud = setup_feeding_camera(feeding_cam_cfg, scene)
+        count_pellets_in_frustum(scene, feed_cam_obj, feeding_cam_cfg, output_path)
+        if not use_camera:
+            scene.camera = feed_cam_obj
+
 
     # 6. Final Shading, View, and Scene Export
     scene.frame_set(1)
@@ -467,16 +479,35 @@ def main(argv=None):
         argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
     parser = argparse.ArgumentParser(description="Sim2Blender unified pipeline runner")
-    parser.add_argument("--config", type=Path, help="JSON configuration file containing all job settings")
+    parser.add_argument("--config", type=str, default=None, help="JSON configuration file containing all job settings")
     parser.add_argument("--config-json", type=str, default=None, help="Raw JSON string containing all job settings")
     args, unknown = parser.parse_known_args(argv)
 
-    if args.config and args.config.is_file():
-        cfg = json.loads(args.config.read_text(encoding="utf-8"))
-    elif args.config_json:
+    cfg = None
+    if args.config:
+        raw_path = str(args.config).strip(' "\'')
+        cfg_path = Path(raw_path)
+        if not cfg_path.is_file() and not cfg_path.is_absolute():
+            candidates = [
+                Path.cwd() / cfg_path,
+                PROJECT_ROOT / cfg_path,
+                PROJECT_ROOT / "output" / cfg_path.name,
+            ]
+            for cand in candidates:
+                if cand.is_file():
+                    cfg_path = cand
+                    break
+        if cfg_path.is_file():
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+
+    if cfg is None and args.config_json:
         cfg = json.loads(args.config_json)
-    else:
-        raise ValueError("Must provide --config <file> or --config-json <str> with valid configuration settings.")
+
+    if cfg is None:
+        raise ValueError(
+            f"Must provide --config <file> or --config-json <str> with valid configuration settings. "
+            f"(Received --config={args.config!r}, --config-json={'<provided>' if args.config_json else None!r}, argv={argv!r})"
+        )
 
     build_unified_scene(cfg)
 

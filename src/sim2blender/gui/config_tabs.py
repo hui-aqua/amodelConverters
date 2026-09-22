@@ -784,6 +784,125 @@ class ConfigTabsMixin:
         v.addStretch()
         self.tab_config.addTab(tab, '🎥 Camera')
 
+    def _build_tab_feeding_camera(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        v = QVBoxLayout(content)
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+
+        # 1. 3D Camera Placement & Target
+        gb_pos = QGroupBox('Camera 3D Placement & Look-At Target')
+        fp = QFormLayout(gb_pos)
+
+        pos_row = QHBoxLayout()
+        self.feedcam_pos_x = QDoubleSpinBox()
+        self.feedcam_pos_x.setRange(-200.0, 200.0)
+        self.feedcam_pos_x.setValue(2.5)
+        self.feedcam_pos_x.setSuffix(' m')
+
+        self.feedcam_pos_y = QDoubleSpinBox()
+        self.feedcam_pos_y.setRange(-200.0, 200.0)
+        self.feedcam_pos_y.setValue(0.0)
+        self.feedcam_pos_y.setSuffix(' m')
+
+        self.feedcam_pos_z = QDoubleSpinBox()
+        self.feedcam_pos_z.setRange(-200.0, 50.0)
+        self.feedcam_pos_z.setValue(-5.0)
+        self.feedcam_pos_z.setSuffix(' m')
+
+        pos_row.addWidget(QLabel('X:'))
+        pos_row.addWidget(self.feedcam_pos_x)
+        pos_row.addWidget(QLabel('Y:'))
+        pos_row.addWidget(self.feedcam_pos_y)
+        pos_row.addWidget(QLabel('Z:'))
+        pos_row.addWidget(self.feedcam_pos_z)
+        fp.addRow('Fixed Position (X, Y, Z)', pos_row)
+
+        target_row = QHBoxLayout()
+        self.feedcam_target_x = QDoubleSpinBox()
+        self.feedcam_target_x.setRange(-200.0, 200.0)
+        self.feedcam_target_x.setValue(0.0)
+        self.feedcam_target_x.setSuffix(' m')
+
+        self.feedcam_target_y = QDoubleSpinBox()
+        self.feedcam_target_y.setRange(-200.0, 200.0)
+        self.feedcam_target_y.setValue(0.0)
+        self.feedcam_target_y.setSuffix(' m')
+
+        self.feedcam_target_z = QDoubleSpinBox()
+        self.feedcam_target_z.setRange(-200.0, 50.0)
+        self.feedcam_target_z.setValue(-5.0)
+        self.feedcam_target_z.setSuffix(' m')
+
+        target_row.addWidget(QLabel('X:'))
+        target_row.addWidget(self.feedcam_target_x)
+        target_row.addWidget(QLabel('Y:'))
+        target_row.addWidget(self.feedcam_target_y)
+        target_row.addWidget(QLabel('Z:'))
+        target_row.addWidget(self.feedcam_target_z)
+        fp.addRow('Look-At Target (X, Y, Z)', target_row)
+        v.addWidget(gb_pos)
+
+        # 2. Visual Detection Volume (Pyramid Shape, FHD Aspect Ratio)
+        gb_optics = QGroupBox('Visible Volume & Optical Frustum (FHD 16:9)')
+        fo = QFormLayout(gb_optics)
+
+        range_row = QHBoxLayout()
+        self.feedcam_visual_dist = QDoubleSpinBox()
+        self.feedcam_visual_dist.setRange(0.1, 100.0)
+        self.feedcam_visual_dist.setValue(2.5)
+        self.feedcam_visual_dist.setSuffix(' m')
+        self.feedcam_visual_dist.setToolTip('Fixed maximum visual distance for underwater detection (pyramid frustum far clip)')
+
+        self.feedcam_clip_start = QDoubleSpinBox()
+        self.feedcam_clip_start.setRange(0.01, 10.0)
+        self.feedcam_clip_start.setValue(0.1)
+        self.feedcam_clip_start.setSuffix(' m')
+
+        range_row.addWidget(QLabel('Visual Range (Far Clip):'))
+        range_row.addWidget(self.feedcam_visual_dist)
+        range_row.addWidget(QLabel('Near Clip:'))
+        range_row.addWidget(self.feedcam_clip_start)
+        fo.addRow('Distance Limits', range_row)
+
+        optics_row = QHBoxLayout()
+        self.feedcam_focal_length = QDoubleSpinBox()
+        self.feedcam_focal_length.setRange(10.0, 300.0)
+        self.feedcam_focal_length.setValue(32.0)
+        self.feedcam_focal_length.setSuffix(' mm')
+
+        self.feedcam_aspect_ratio_label = QLabel('16:9 Full HD (1920 × 1080)')
+        self.feedcam_aspect_ratio_label.setStyleSheet('color: #087e8b; font-weight: 600;')
+
+        optics_row.addWidget(QLabel('Focal Length:'))
+        optics_row.addWidget(self.feedcam_focal_length)
+        optics_row.addWidget(QLabel('Aspect Ratio:'))
+        optics_row.addWidget(self.feedcam_aspect_ratio_label)
+        fo.addRow('Optics & Sensor', optics_row)
+        v.addWidget(gb_optics)
+
+        # 3. Detection Counter & 3D Visualization
+        gb_vis = QGroupBox('Pellet Passage Detection & 3D Visualization')
+        fv = QFormLayout(gb_vis)
+
+        self.feedcam_show_frustum = QCheckBox('Draw 3D Visual Pyramid Frustum (Detection Volume Mesh)')
+        self.feedcam_show_frustum.setChecked(True)
+        self.feedcam_show_frustum.setToolTip('Generate a wireframe/transparent pyramid mesh matching the camera optical detection cone')
+        fv.addRow(self.feedcam_show_frustum)
+
+        self.feedcam_show_counter = QCheckBox('Display 3D HUD Counter Overlay in Viewport')
+        self.feedcam_show_counter.setChecked(True)
+        self.feedcam_show_counter.setToolTip('Anchor a 3D text counter above the feeding camera displaying the total unique pellet count')
+        fv.addRow(self.feedcam_show_counter)
+        v.addWidget(gb_vis)
+
+        v.addStretch()
+        self.tab_config.addTab(tab, '📷 Feeding Camera')
+
     def _populate_spreader_presets(self):
         """Populate spreader preset dropdown dynamically from assets/spreaders subfolders."""
         self.spreader_preset_combo.clear()

@@ -184,6 +184,7 @@ class PipelineJob:
     feed_animation: dict | None = None
     fish_feeding: dict | None = None
     cinematic_camera: dict | None = None
+    feeding_camera: dict | None = None
 
     def command(self):
         if hasattr(ModelJob.command, 'return_value') or hasattr(ModelJob.command, 'side_effect'):
@@ -222,18 +223,22 @@ class PipelineJob:
             'feed_animation': self.feed_animation,
             'fish_feeding': self.fish_feeding,
             'cinematic_camera': self.cinematic_camera,
+            'feeding_camera': self.feeding_camera,
         }
 
         self.output.parent.mkdir(parents=True, exist_ok=True)
         config_file = self.output.with_suffix('.job.json')
         import json
+        config_json_str = json.dumps(job_dict)
         config_file.write_text(json.dumps(job_dict, indent=2), encoding='utf-8')
 
         runner = Path(__file__).resolve().parents[1] / 'cli' / 'blender_entry.py'
         args = [
             '--background', '--factory-startup', '--python-exit-code', '1',
             '--python', str(runner),
-            '--', 'pipeline', '--config', str(config_file.resolve())
+            '--', 'pipeline',
+            '--config', str(config_file.resolve()),
+            '--config-json', config_json_str,
         ]
         return program, args
 

@@ -81,8 +81,45 @@ class ModelJobTests(unittest.TestCase):
             self.assertEqual(data['truss_ids'], [25, 26])
             self.assertTrue(data['replay']['enabled'])
             self.assertEqual(data['fish_schooling']['fish_count'], 500)
+            self.assertIn('--config-json', args)
+            json_str = args[args.index('--config-json') + 1]
+            data_from_arg = json.loads(json_str)
+            self.assertEqual(data_from_arg['fish_schooling']['fish_count'], 500)
 
-    def test_replay_command_options(self):
+    def test_unified_pipeline_cli_parsing(self):
+        from unittest.mock import patch
+        from sim2blender.workflows.unified_pipeline import main as pipeline_main
+        import json
+
+        sample_cfg = {"model": "test.amodel", "output": "test.blend", "frames": 10}
+
+        with tempfile.TemporaryDirectory(prefix='CliParse ') as folder:
+            cfg_file = Path(folder) / "job with spaces.json"
+            cfg_file.write_text(json.dumps(sample_cfg), encoding="utf-8")
+
+            # 1. Normal --config path
+            with patch("sim2blender.workflows.unified_pipeline.build_unified_scene") as mock_build:
+                pipeline_main(["--config", str(cfg_file)])
+                mock_build.assert_called_once_with(sample_cfg)
+
+            # 2. Quoted --config path (Windows command line artifact)
+            with patch("sim2blender.workflows.unified_pipeline.build_unified_scene") as mock_build:
+                pipeline_main(["--config", f'"{cfg_file}"'])
+                mock_build.assert_called_once_with(sample_cfg)
+
+            # 3. Direct --config-json string
+            with patch("sim2blender.workflows.unified_pipeline.build_unified_scene") as mock_build:
+                pipeline_main(["--config-json", json.dumps(sample_cfg)])
+                mock_build.assert_called_once_with(sample_cfg)
+
+            # 4. Broken --config but valid --config-json fallback
+            with patch("sim2blender.workflows.unified_pipeline.build_unified_scene") as mock_build:
+                pipeline_main(["--config", "nonexistent_file.json", "--config-json", json.dumps(sample_cfg)])
+                mock_build.assert_called_once_with(sample_cfg)
+
+            # 5. Neither provided -> informative ValueError
+            with self.assertRaisesRegex(ValueError, "Must provide --config <file> or --config-json"):
+                pipeline_main([])
         with tempfile.TemporaryDirectory(prefix='Replay paths ') as folder:
             base=Path(folder)
             model=base/'my cage.amodel';model.touch()

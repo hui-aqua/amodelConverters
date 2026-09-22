@@ -187,6 +187,7 @@ class GuiTests(unittest.TestCase):
         self.window.opt_feed.setChecked(False)
         self.window.opt_feeding.setChecked(False)
         self.window.opt_camera.setChecked(False)
+        self.window.opt_feeding_camera.setChecked(False)
 
         self.assertTrue(self.window.tab_config.isTabVisible(0))
         self.assertFalse(self.window.tab_config.isTabVisible(1))
@@ -194,10 +195,13 @@ class GuiTests(unittest.TestCase):
         self.assertFalse(self.window.tab_config.isTabVisible(3))
         self.assertFalse(self.window.tab_config.isTabVisible(4))
         self.assertFalse(self.window.tab_config.isTabVisible(5))
+        self.assertFalse(self.window.tab_config.isTabVisible(6))
 
         # Toggling a stage reveals its configuration tab
         self.window.opt_camera.setChecked(True)
         self.assertTrue(self.window.tab_config.isTabVisible(5))
+        self.window.opt_feeding_camera.setChecked(True)
+        self.assertTrue(self.window.tab_config.isTabVisible(6))
 
         # Toggling a stage off hides its configuration tab
         self.window.opt_schooling.setChecked(False)
@@ -215,6 +219,7 @@ class GuiTests(unittest.TestCase):
         self.window.opt_feed.setChecked(False)
         self.window.opt_feeding.setChecked(False)
         self.window.opt_camera.setChecked(False)
+        self.window.opt_feeding_camera.setChecked(False)
         self.window.show()
         self.assertTrue(self.window.tab_config.isHidden())
         self.assertFalse(self.window.no_stages_placeholder.isHidden())

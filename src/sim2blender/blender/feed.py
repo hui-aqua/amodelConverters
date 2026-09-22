@@ -471,24 +471,28 @@ def run_feed_animation(config: dict | None = None) -> None:
         rotor.empty_display_size = 0.12
         rotor.show_in_front = True
         rotor.location = (0.0, 0.0, total_z_offset)
+        rotor.rotation_euler = (0.0, 0.0, 0.0)
+        rotor.scale = (1.0, 1.0, 1.0)
         system_collection.objects.link(rotor)
 
-        spreader_world = spreader_move.matrix_world.copy()
+        # Parent spreader_move to rotor.
+        # Since rotor is positioned at total_z_offset, local location (0, 0, 0)
+        # places spreader_move at world Z = total_z_offset (avoiding double lifting).
         spreader_move.parent = rotor
-        spreader_move.matrix_world = spreader_world
+        spreader_move.location = (0.0, 0.0, 0.0)
+        spreader_move.rotation_euler = (0.0, 0.0, 0.0)
+        spreader_move.scale = (1.0, 1.0, 1.0)
 
         outlet = bpy.data.objects.new("FishFeed_Outlet_30kgmin", None)
         outlet.empty_display_type = "CIRCLE"
         outlet.empty_display_size = 0.035
         outlet.show_in_front = True
-        outlet.location = tip
-        outlet.rotation_euler.y = math.pi / 2.0
-        system_collection.objects.link(outlet)
-        bpy.context.view_layer.update()
-
-        outlet_world = outlet.matrix_world.copy()
         outlet.parent = rotor
-        outlet.matrix_world = outlet_world
+        # Relative to rotor at (0, 0, total_z_offset), local Z is tip.z - total_z_offset
+        outlet.location = (tip.x, tip.y, tip.z - total_z_offset)
+        outlet.rotation_euler = (0.0, math.pi / 2.0, 0.0)
+        outlet.scale = (1.0, 1.0, 1.0)
+        system_collection.objects.link(outlet)
         bpy.context.view_layer.update()
 
         outlet["mass_flow_kg_min"] = mass_flow_kg_min
@@ -499,7 +503,20 @@ def run_feed_animation(config: dict | None = None) -> None:
         outlet = bpy.data.objects.get("FishFeed_Outlet_30kgmin")
         if system_collection is None or outlet is None:
             raise RuntimeError("The existing feed setup is incomplete")
-        tip = outlet.matrix_world.translation.copy()
+        spreader_move = bpy.data.objects.get("spreader_move")
+        if spreader_move is not None:
+            if spreader_move.parent != rotor:
+                spreader_move.parent = rotor
+            spreader_move.location = (0.0, 0.0, 0.0)
+            spreader_move.rotation_euler = (0.0, 0.0, 0.0)
+            spreader_move.scale = (1.0, 1.0, 1.0)
+        still_obj = bpy.data.objects.get("spreader_still")
+        if still_obj is not None:
+            still_obj.location = (0.0, 0.0, total_z_offset)
+        rotor.location = (0.0, 0.0, total_z_offset)
+        bpy.context.view_layer.update()
+        tip = find_spreader_outlet_tip(spreader_move) if spreader_move else outlet.matrix_world.translation.copy()
+        outlet.location = (tip.x, tip.y, tip.z - total_z_offset)
 
     rotor["rotation_rpm"] = rpm
     rotor["angular_speed_rad_s"] = angular_speed

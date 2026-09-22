@@ -144,8 +144,20 @@ class SpreaderWaterlineTests(unittest.TestCase):
         # World Z of outlet should be above 0.52m
         self.assertGreater(outlet.matrix_world.translation.z, 0.52)
 
+        move = bpy.data.objects.get("spreader_move")
+        still = bpy.data.objects.get("spreader_still")
+        if move and still:
+            bpy.context.view_layer.update()
+            self.assertAlmostEqual(still.matrix_world.translation.z, 0.52, places=3)
+            self.assertAlmostEqual(move.matrix_world.translation.z, 0.52, places=3)
+            self.assertAlmostEqual(rotor.matrix_world.translation.z, 0.52, places=3)
+
         self.assertEqual(self.scene["feed_spreader_z_offset"], 0.52)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    import sys
+    argv = [sys.argv[0]]
+    if "--" in sys.argv:
+        argv += sys.argv[sys.argv.index("--") + 1:]
+    unittest.main(argv=argv)

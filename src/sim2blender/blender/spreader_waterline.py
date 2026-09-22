@@ -260,22 +260,20 @@ def visualize_spreader_waterline(
             root_obj.keyframe_insert("location", frame=f)
         target_scene.frame_set(1)
 
-    # Ensure spreader objects are parented to the root controller
+    # Ensure spreader objects are parented to the root controller at local (0, 0, 0)
     if spreader_still is not None and spreader_still.parent != root_obj:
-        spreader_still.location = (0.0, 0.0, total_z)
-        bpy.context.view_layer.update()
-        w_still = spreader_still.matrix_world.copy()
         spreader_still.parent = root_obj
-        spreader_still.matrix_world = w_still
+        spreader_still.location = (0.0, 0.0, 0.0)
+        spreader_still.rotation_euler = (0.0, 0.0, 0.0)
+        spreader_still.scale = (1.0, 1.0, 1.0)
         if spreader_still.name not in col.objects:
             col.objects.link(spreader_still)
 
     if spreader_move is not None and spreader_move.parent != root_obj:
-        spreader_move.location = (0.0, 0.0, total_z)
-        bpy.context.view_layer.update()
-        w_move = spreader_move.matrix_world.copy()
         spreader_move.parent = root_obj
-        spreader_move.matrix_world = w_move
+        spreader_move.location = (0.0, 0.0, 0.0)
+        spreader_move.rotation_euler = (0.0, 0.0, 0.0)
+        spreader_move.scale = (1.0, 1.0, 1.0)
         if spreader_move.name not in col.objects:
             col.objects.link(spreader_move)
 

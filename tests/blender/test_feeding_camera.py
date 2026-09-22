@@ -231,4 +231,8 @@ class TestFeedingCamera(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    import sys
+    argv = [sys.argv[0]]
+    if "--" in sys.argv:
+        argv += sys.argv[sys.argv.index("--") + 1:]
+    unittest.main(argv=argv)

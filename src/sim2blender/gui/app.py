@@ -1,8 +1,8 @@
 """Desktop model-to-Blender unified workflow with asynchronous inspection and execution.
 
 Features a 3-column CAD/Simulation layout:
-- Column 1: Project inputs, enclosing net selection, and pipeline stage checklist.
-- Column 2: Dedicated Stage Configuration Column with comprehensive physical, biological, fluid, and optical parameters.
+- Column 1: Project inputs, enclosing net selection, and optional functions checklist.
+- Column 2: Dedicated Function Configuration Column with comprehensive physical, biological, fluid, and optical parameters.
 - Column 3: Build status, real-time log monitor, and execution controls.
 """
 from __future__ import annotations
@@ -114,7 +114,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         main_layout.addWidget(self.main_split, 1)
 
         # =============================================================
-        # COLUMN 1: Project Setup & Pipeline Stages
+        # COLUMN 1: Project Setup & Optional Functions
         # =============================================================
         scroll_col1 = QScrollArea()
         scroll_col1.setWidgetResizable(True)
@@ -235,19 +235,19 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         e.addLayout(frame_row)
         col1_layout.addWidget(self.enclosure)
 
-        # 1.3 Pipeline Stages Checklist
-        stages_group = QGroupBox('3   Pipeline Stages')
+        # 1.3 Optional Functions Checklist
+        stages_group = QGroupBox('3   Optional Functions')
         sg = QVBoxLayout(stages_group)
         sg.setSpacing(8)
 
-        self.opt_env = QCheckBox('Ocean water, waves & current')
+        self.opt_env = QCheckBox('Environment')
         self.opt_env.setChecked(True)
         self.opt_replay = QCheckBox('AquaSim results replay')
         self.opt_replay.toggled.connect(self.replay_toggled)
-        self.opt_schooling = QCheckBox('Simple fish schooling')
+        self.opt_schooling = QCheckBox('Fish schooling')
         self.opt_schooling.setChecked(True)
         self.opt_schooling.toggled.connect(lambda _: self.selection_changed())
-        self.opt_feed = QCheckBox('Feed animation')
+        self.opt_feed = QCheckBox('Feeding')
         self.opt_feeding = QCheckBox('Fish feeding interaction')
         self.opt_camera = QCheckBox('Cinematic camera')
 
@@ -288,7 +288,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         col1_layout.addStretch()
 
         # =============================================================
-        # COLUMN 2: Dedicated Stage Configuration Column
+        # COLUMN 2: Dedicated Function Configuration Column
         # =============================================================
         col2_widget = QWidget()
         col2_layout = QVBoxLayout(col2_widget)
@@ -296,7 +296,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         col2_layout.setSpacing(8)
 
         col2_title_box = QHBoxLayout()
-        col2_title = QLabel('Stage Configuration')
+        col2_title = QLabel('Function Configuration')
         col2_title.setObjectName('SectionTitle')
         col2_title_box.addWidget(col2_title)
         self.col2_stage_count = QLabel('')
@@ -325,12 +325,12 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         ph_icon.setStyleSheet('font-size: 28px; color: #8fa7b5;')
         placeholder_card_layout.addWidget(ph_icon)
 
-        ph_title = QLabel('No Pipeline Stages Selected')
+        ph_title = QLabel('No Optional Functions Selected')
         ph_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ph_title.setStyleSheet('font-size: 14px; font-weight: 600; color: #123e50;')
         placeholder_card_layout.addWidget(ph_title)
 
-        ph_msg = QLabel('Select one or more stages in "3   Pipeline Stages" on the left to configure their options here.')
+        ph_msg = QLabel('Select one or more functions in "3   Optional Functions" on the left to configure their options here.')
         ph_msg.setWordWrap(True)
         ph_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ph_msg.setStyleSheet('font-size: 12px; color: #536875;')
@@ -465,8 +465,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             (self.opt_env, 0, '🌊 Environment'),
             (self.opt_replay, 1, '🌊 Replay'),
             (self.opt_schooling, 2, '🐟 Schooling'),
-            (self.opt_feed, 3, '🌀 Feed'),
-            (self.opt_feeding, 4, '🍴 Feeding'),
+            (self.opt_feed, 3, '🌀 Feeding'),
+            (self.opt_feeding, 4, '🍴 Interaction'),
             (self.opt_camera, 5, '🎥 Camera'),
         ]
         active_count = 0

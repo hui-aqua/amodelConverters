@@ -1,4 +1,4 @@
-"""Configuration tabs for simulation pipeline stages."""
+"""Configuration tabs for optional simulation functions."""
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
@@ -13,7 +13,7 @@ from sim2blender.core.paths import PROJECT_ROOT
 
 
 class ConfigTabsMixin:
-    """Mixin providing pipeline stage configuration tabs for MainWindow."""
+    """Mixin providing optional function configuration tabs for MainWindow."""
     def _update_wave_model(self, *_):
         irregular = self.env_wave_type.currentData() == 'jonswap'
         self.env_height_label.setText('Significant height Hs:' if irregular else 'Height H:')
@@ -616,7 +616,7 @@ class ConfigTabsMixin:
         v.addWidget(gb_fluid)
 
         v.addStretch()
-        self.tab_config.addTab(tab, '🌀 Feed')
+        self.tab_config.addTab(tab, '🌀 Feeding')
 
     def _build_tab_feeding(self):
         tab = QWidget()
@@ -685,7 +685,7 @@ class ConfigTabsMixin:
         v.addWidget(gb_depth)
 
         v.addStretch()
-        self.tab_config.addTab(tab, '🍴 Feeding')
+        self.tab_config.addTab(tab, '🍴 Interaction')
 
     def _build_tab_camera(self):
         tab = QWidget()

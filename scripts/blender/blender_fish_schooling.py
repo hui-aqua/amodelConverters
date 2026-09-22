@@ -79,6 +79,11 @@ WAVE_DIR_DEG = 30.0             # 波浪传播方向 (度)
 HYDRO_COUPLING = 0.35           # 水动力耦合强度 (0.0~1.0)
 RHEOTAXIS_WEIGHT = 0.15         # 逆流趋流性对齐权重
 
+# 尾鳍自主游动摆动 (Procedural Tail Swimming Undulation)
+TAIL_MOTION = True             # 是否启用尾鳍游动摆动 (Geometry Nodes 行波变形)
+TAIL_AMPLITUDE_M = 0.065       # 尾鳍横向最大摆动幅度 (m)
+TAIL_FREQUENCY_HZ = 2.2        # 尾鳍游动摆动频率 (Hz)
+
 
 def main() -> None:
     config = {
@@ -112,6 +117,9 @@ def main() -> None:
         "wave_direction_deg": WAVE_DIR_DEG,
         "hydro_coupling": HYDRO_COUPLING,
         "rheotaxis_weight": RHEOTAXIS_WEIGHT,
+        "tail_motion": TAIL_MOTION,
+        "tail_amplitude_m": TAIL_AMPLITUDE_M,
+        "tail_frequency_hz": TAIL_FREQUENCY_HZ,
     }
     run_fish_schooling(config)
 

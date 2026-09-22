@@ -11,10 +11,25 @@ def salmon_mesh(length=.775):
     import bpy
     from mathutils import Vector
     # Tail peduncle to snout; elliptical cross sections give a tapered body.
-    sections = [(-.36,.014,.023),(-.28,.026,.043),(-.16,.047,.071),
-                (0,.060,.090),(.17,.052,.079),(.29,.036,.060),
-                (.39,.022,.039),(.47,.010,.015)]
-    sides = 16
+    # Refined longitudinal resolution (20 sections) and radial resolution (20 sides)
+    # for smooth swimming undulation deformation without faceting.
+    base_sections = [(-.36,.014,.023),(-.28,.026,.043),(-.16,.047,.071),
+                     (0,.060,.090),(.17,.052,.079),(.29,.036,.060),
+                     (.39,.022,.039),(.47,.010,.015)]
+    def _interp_section(x):
+        for i in range(len(base_sections) - 1):
+            x0, w0, h0 = base_sections[i]
+            x1, w1, h1 = base_sections[i + 1]
+            if x0 <= x <= x1 or i == len(base_sections) - 2:
+                t = (x - x0) / (x1 - x0)
+                t = max(0.0, min(1.0, t))
+                t_smooth = 0.5 * (1.0 - math.cos(math.pi * t))
+                return (x, w0 + (w1 - w0) * t_smooth, h0 + (h1 - h0) * t_smooth)
+        return (x, base_sections[-1][1], base_sections[-1][2])
+
+    num_sections = 20
+    sections = [_interp_section(-.36 + i * (.47 - (-.36)) / (num_sections - 1)) for i in range(num_sections)]
+    sides = 20
     verts = [(x, w*math.cos(j*2*math.pi/sides), h*math.sin(j*2*math.pi/sides))
              for x,w,h in sections for j in range(sides)]
     faces = [tuple(reversed(range(sides)))]

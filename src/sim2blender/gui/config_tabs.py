@@ -421,6 +421,34 @@ class ConfigTabsMixin:
         fk.addRow('Random Seed', self.fish_seed)
         v.addWidget(gb_kinematics)
 
+        gb_tail = QGroupBox('Swimming Undulation & Tail Motion')
+        ft = QFormLayout(gb_tail)
+        self.fish_tail_motion = QCheckBox('Enable Procedural Tail Undulation')
+        self.fish_tail_motion.setChecked(True)
+        ft.addRow(self.fish_tail_motion)
+
+        tail_row = QHBoxLayout()
+        self.fish_tail_amplitude = QDoubleSpinBox()
+        self.fish_tail_amplitude.setRange(0.0, 0.5)
+        self.fish_tail_amplitude.setDecimals(3)
+        self.fish_tail_amplitude.setSingleStep(0.005)
+        self.fish_tail_amplitude.setValue(0.065)
+        self.fish_tail_amplitude.setSuffix(' m')
+
+        self.fish_tail_frequency = QDoubleSpinBox()
+        self.fish_tail_frequency.setRange(0.1, 10.0)
+        self.fish_tail_frequency.setDecimals(2)
+        self.fish_tail_frequency.setSingleStep(0.1)
+        self.fish_tail_frequency.setValue(2.2)
+        self.fish_tail_frequency.setSuffix(' Hz')
+
+        tail_row.addWidget(QLabel('Amplitude:'))
+        tail_row.addWidget(self.fish_tail_amplitude)
+        tail_row.addWidget(QLabel('Frequency:'))
+        tail_row.addWidget(self.fish_tail_frequency)
+        ft.addRow('Tail Motion Dynamics', tail_row)
+        v.addWidget(gb_tail)
+
         v.addStretch()
         self.tab_config.addTab(tab, '🐟 Schooling')
 
@@ -463,6 +491,15 @@ class ConfigTabsMixin:
         self.btn_visualize_waterline.clicked.connect(self.visualize_spreader_waterline)
         row_waterline.addWidget(self.btn_visualize_waterline)
         fm.addRow('Water Line Lift (Z)', row_waterline)
+
+        self.spreader_heave_rao = QDoubleSpinBox()
+        self.spreader_heave_rao.setRange(0.0, 2.0)
+        self.spreader_heave_rao.setDecimals(2)
+        self.spreader_heave_rao.setSingleStep(0.05)
+        self.spreader_heave_rao.setValue(0.50)
+        self.spreader_heave_rao.setToolTip('Heave Response Amplitude Operator (RAO) for wave-induced spreader vertical motion (default: 0.50)')
+        fm.addRow('Heave RAO', self.spreader_heave_rao)
+
         v.addWidget(gb_models)
 
         gb_rotor = QGroupBox('Rotor Kinematics & Discharge Flow')

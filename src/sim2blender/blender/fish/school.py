@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 from sim2blender.blender.enclosure import Enclosure
 
-def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.775, speed=.6, seed=7, advect=False, fish_asset=None, fish_object=None, species='Atlantic salmon'):
+def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.775, speed=.6, seed=7, advect=False, fish_asset=None, fish_object=None, species='Atlantic salmon', tail_motion=True, tail_amplitude_m=0.065, tail_frequency_hz=2.2):
     """Bake deterministic schooling against evaluated cloth at every integer frame.
 
     A sphere encloses each fish, so orientation cannot violate wall clearance.
@@ -42,6 +42,15 @@ def add_fish_school(cage, faces, fish_count=1000, frames=120, fish_length=.775, 
         if not appearance.custom:
             obj['fish_species'] = 'Atlantic salmon'
             obj['fish_weight_kg'] = template['nominal_weight_kg']
+        if tail_motion:
+            from sim2blender.blender.fish.tail_motion import apply_fish_tail_motion
+            apply_fish_tail_motion(
+                obj,
+                amplitude_m=tail_amplitude_m,
+                frequency_hz=tail_frequency_hz,
+                phase_offset=rng.uniform(0.0, math.tau),
+                wavelength_m=fish_length * 1.0,
+            )
         fish.append(obj)
     positions = []
     velocities = []
@@ -149,6 +158,10 @@ DEFAULT_SCHOOL_CONFIG = {
     "hydro_coupling": 0.35,
     "rheotaxis_weight": 0.15,
     "species": "Atlantic salmon",
+    # Swimming Undulation / Tail Motion (Geometry Nodes Traveling Wave)
+    "tail_motion": True,
+    "tail_amplitude_m": 0.065,
+    "tail_frequency_hz": 2.2,
 }
 
 
@@ -337,6 +350,10 @@ def run_fish_schooling(config: dict | None = None) -> None:
 
     species_name = str(cfg["species"])
 
+    tail_motion_enabled = bool(cfg.get("tail_motion", True))
+    tail_amp = float(cfg.get("tail_amplitude_m", 0.065))
+    tail_freq = float(cfg.get("tail_frequency_hz", 2.2))
+
     if bpy.context.mode != "OBJECT" and bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -400,6 +417,15 @@ def run_fish_schooling(config: dict | None = None) -> None:
         fish_obj.scale = (scale_ratio, scale_ratio, scale_ratio)
         fish_obj["fish_species"] = species_name
         fish_obj["fish_length_m"] = length_i
+        if tail_motion_enabled:
+            from sim2blender.blender.fish.tail_motion import apply_fish_tail_motion
+            apply_fish_tail_motion(
+                fish_obj,
+                amplitude_m=tail_amp * (length_i / mean_length),
+                frequency_hz=tail_freq * (cruise_speed_i / (speed_bl * mean_length)),
+                phase_offset=rng.uniform(0.0, math.tau),
+                wavelength_m=length_i * 1.0,
+            )
         fish_objects.append(fish_obj)
 
         pos = enclosure.sample(rng, clearance_i)

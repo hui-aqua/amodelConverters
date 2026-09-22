@@ -869,12 +869,16 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.fish_wall_buffer.setValue(self.settings.value('fish_wall_buffer', 0.05, type=float))
         self.fish_max_turn_rate.setValue(self.settings.value('fish_max_turn_rate', 120.0, type=float))
         self.fish_seed.setValue(self.settings.value('fish_seed', 7, type=int))
+        self.fish_tail_motion.setChecked(self.settings.value('fish_tail_motion', True, type=bool))
+        self.fish_tail_amplitude.setValue(self.settings.value('fish_tail_amplitude', 0.065, type=float))
+        self.fish_tail_frequency.setValue(self.settings.value('fish_tail_frequency', 2.2, type=float))
 
         # Feed
         self.opt_feed.setChecked(self.settings.value('opt_feed', False, type=bool))
         self.spreader_move_edit.setText(self.settings.value('spreader_move', str(PROJECT_ROOT / 'assets/spreaders/default/spreader_move.obj')))
         self.spreader_still_edit.setText(self.settings.value('spreader_still', str(PROJECT_ROOT / 'assets/spreaders/default/spreader_still.obj')))
         self.spreader_z_offset.setValue(self.settings.value('spreader_z_offset', 0.52, type=float))
+        self.spreader_heave_rao.setValue(self.settings.value('spreader_heave_rao', 0.50, type=float))
         self.feed_rpm.setValue(self.settings.value('feed_rpm', -30.0, type=float))
         self.feed_mass_flow.setValue(self.settings.value('feed_mass_flow', 30.0, type=float))
         self.feed_pellet_mass.setValue(self.settings.value('feed_pellet_mass', 0.01, type=float))
@@ -972,11 +976,15 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.settings.setValue('fish_wall_buffer', self.fish_wall_buffer.value())
         self.settings.setValue('fish_max_turn_rate', self.fish_max_turn_rate.value())
         self.settings.setValue('fish_seed', self.fish_seed.value())
+        self.settings.setValue('fish_tail_motion', self.fish_tail_motion.isChecked())
+        self.settings.setValue('fish_tail_amplitude', self.fish_tail_amplitude.value())
+        self.settings.setValue('fish_tail_frequency', self.fish_tail_frequency.value())
 
         self.settings.setValue('opt_feed', self.opt_feed.isChecked())
         self.settings.setValue('spreader_move', self.spreader_move_edit.text())
         self.settings.setValue('spreader_still', self.spreader_still_edit.text())
         self.settings.setValue('spreader_z_offset', self.spreader_z_offset.value())
+        self.settings.setValue('spreader_heave_rao', self.spreader_heave_rao.value())
         self.settings.setValue('feed_rpm', self.feed_rpm.value())
         self.settings.setValue('feed_mass_flow', self.feed_mass_flow.value())
         self.settings.setValue('feed_pellet_mass', self.feed_pellet_mass.value())
@@ -1091,6 +1099,9 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'wall_avoidance_weight': self.fish_wall_avoidance.value(),
                     'wall_buffer_m': self.fish_wall_buffer.value(),
                     'max_turn_rate_deg_s': self.fish_max_turn_rate.value(),
+                    'tail_motion': self.fish_tail_motion.isChecked(),
+                    'tail_amplitude_m': self.fish_tail_amplitude.value(),
+                    'tail_frequency_hz': self.fish_tail_frequency.value(),
                 }
 
             feed_dict = None
@@ -1100,6 +1111,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'spreader_move_obj': self.spreader_move_edit.text().strip(),
                     'spreader_still_obj': self.spreader_still_edit.text().strip(),
                     'spreader_z_offset': self.spreader_z_offset.value(),
+                    'spreader_heave_rao': self.spreader_heave_rao.value(),
                     'rpm': self.feed_rpm.value(),
                     'mass_flow_kg_min': self.feed_mass_flow.value(),
                     'visual_particle_mass_kg': self.feed_pellet_mass.value(),
@@ -1313,7 +1325,9 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         move_obj = self.spreader_move_edit.text().strip() if hasattr(self, 'spreader_move_edit') else ''
         still_obj = self.spreader_still_edit.text().strip() if hasattr(self, 'spreader_still_edit') else ''
         z_offset = str(self.spreader_z_offset.value() if hasattr(self, 'spreader_z_offset') else 0.52)
+        heave_rao = str(self.spreader_heave_rao.value() if hasattr(self, 'spreader_heave_rao') else 0.5)
         water_level = str(self.feed_water_level.value() if hasattr(self, 'feed_water_level') else 0.0)
+        wave_height = str(self.env_wave_height.value() if (hasattr(self, 'opt_env') and self.opt_env.isChecked() and hasattr(self, 'env_wave_height')) else 0.0)
 
         args = [
             '--python', str(script_path),
@@ -1322,6 +1336,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             '--still-obj', still_obj,
             '--z-offset', z_offset,
             '--water-level', water_level,
+            '--heave-rao', heave_rao,
+            '--wave-height', wave_height,
         ]
 
         ok, _ = QProcess.startDetached(str(blender_path), args, str(PROJECT_ROOT))

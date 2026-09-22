@@ -34,6 +34,7 @@ DEFAULT_FEED_CONFIG = {
     "random_seed": 30030,
     "water_level_z": 0.0,
     "spreader_z_offset": 0.52,
+    "spreader_heave_rao": 0.5,
     "pellet_density_kg_m3": 1100.0,
     "air_density_kg_m3": 1.225,
     "water_density_kg_m3": 1000.0,
@@ -56,6 +57,7 @@ GRAVITY_M_S2 = DEFAULT_FEED_CONFIG["gravity_m_s2"]
 RANDOM_SEED = DEFAULT_FEED_CONFIG["random_seed"]
 WATER_LEVEL_Z = DEFAULT_FEED_CONFIG["water_level_z"]
 SPREADER_Z_OFFSET = DEFAULT_FEED_CONFIG["spreader_z_offset"]
+SPREADER_HEAVE_RAO = DEFAULT_FEED_CONFIG["spreader_heave_rao"]
 PELLET_DENSITY_KG_M3 = DEFAULT_FEED_CONFIG["pellet_density_kg_m3"]
 AIR_DENSITY_KG_M3 = DEFAULT_FEED_CONFIG["air_density_kg_m3"]
 WATER_DENSITY_KG_M3 = DEFAULT_FEED_CONFIG["water_density_kg_m3"]
@@ -402,6 +404,7 @@ def run_feed_animation(config: dict | None = None) -> None:
     seed = int(cfg.get("random_seed", RANDOM_SEED))
     water_level_z = float(cfg.get("water_level_z", cfg.get("water_level_m", WATER_LEVEL_Z)))
     spreader_z_offset = float(cfg.get("spreader_z_offset", SPREADER_Z_OFFSET))
+    spreader_heave_rao = float(cfg.get("spreader_heave_rao", cfg.get("heave_rao", SPREADER_HEAVE_RAO)))
     total_z_offset = water_level_z + spreader_z_offset
     pellet_density = float(cfg.get("pellet_density_kg_m3", PELLET_DENSITY_KG_M3))
     air_density = float(cfg.get("air_density_kg_m3", AIR_DENSITY_KG_M3))
@@ -420,6 +423,7 @@ def run_feed_animation(config: dict | None = None) -> None:
     wave_period = float(cfg.get("wave_period_s", cfg.get("wave_period", scene.get("wave_period_s", 5.0))))
     wave_length = float(cfg.get("wave_length_m", cfg.get("wave_length", scene.get("wave_length_m", 30.0))))
     from sim2blender.core.waves import wave_options
+    from sim2blender.blender.environment import calculate_wave_elevation
     spectrum_options = wave_options({**wave_options(scene), **cfg})
     wave_dir_deg = float(cfg.get("wave_direction_deg", cfg.get("wave_dir_deg", scene.get("wave_direction_deg", 0.0))))
 
@@ -496,10 +500,36 @@ def run_feed_animation(config: dict | None = None) -> None:
 
     rotor["rotation_rpm"] = rpm
     rotor["angular_speed_rad_s"] = angular_speed
+    rotor["spreader_heave_rao"] = spreader_heave_rao
     rotor.rotation_mode = "XYZ"
     rotation_driver = rotor.driver_add("rotation_euler", 2).driver
     rotation_driver.type = "SCRIPTED"
     rotation_driver.expression = f"(frame-{frame_start:.8f})*{angular_speed / fps:.12f}"
+
+    # Spreader heave motion keyframing according to local wave elevation (RAO = 0.5)
+    still_obj = bpy.data.objects.get("spreader_still")
+    if wave_height > 0.0 and spreader_heave_rao > 0.0:
+        for f_idx in range(int(frame_start), int(frame_end) + 1):
+            t_sec = f_idx / fps
+            eta_val = calculate_wave_elevation(
+                0.0, 0.0, t_sec,
+                wave_height=wave_height,
+                wave_period=wave_period,
+                wave_length=wave_length,
+                wave_dir_deg=wave_dir_deg,
+                water_level=water_level_z,
+                **(spectrum_options or {}),
+            ) - water_level_z
+            heave_z = total_z_offset + spreader_heave_rao * eta_val
+            rotor.location = (0.0, 0.0, heave_z)
+            rotor.keyframe_insert("location", frame=f_idx)
+            if still_obj is not None:
+                still_obj.location = (0.0, 0.0, heave_z)
+                still_obj.keyframe_insert("location", frame=f_idx)
+    else:
+        rotor.location = (0.0, 0.0, total_z_offset)
+        if still_obj is not None:
+            still_obj.location = (0.0, 0.0, total_z_offset)
 
     old_particle_collection = bpy.data.collections.get("FishFeed_Proxy_Particles")
     if old_particle_collection is not None:
@@ -526,11 +556,47 @@ def run_feed_animation(config: dict | None = None) -> None:
         cosine = math.cos(angle)
         sine = math.sin(angle)
 
+        if wave_height > 0.0 and spreader_heave_rao > 0.0:
+            eta_emit = calculate_wave_elevation(
+                0.0, 0.0, emit_time_global,
+                wave_height=wave_height,
+                wave_period=wave_period,
+                wave_length=wave_length,
+                wave_dir_deg=wave_dir_deg,
+                water_level=water_level_z,
+                **(spectrum_options or {}),
+            ) - water_level_z
+            heave_offset_z = spreader_heave_rao * eta_emit
+
+            dt_d = 0.001
+            eta_plus = calculate_wave_elevation(
+                0.0, 0.0, emit_time_global + dt_d,
+                wave_height=wave_height,
+                wave_period=wave_period,
+                wave_length=wave_length,
+                wave_dir_deg=wave_dir_deg,
+                water_level=water_level_z,
+                **(spectrum_options or {}),
+            ) - water_level_z
+            eta_minus = calculate_wave_elevation(
+                0.0, 0.0, emit_time_global - dt_d,
+                wave_height=wave_height,
+                wave_period=wave_period,
+                wave_length=wave_length,
+                wave_dir_deg=wave_dir_deg,
+                water_level=water_level_z,
+                **(spectrum_options or {}),
+            ) - water_level_z
+            v_heave_z = spreader_heave_rao * (eta_plus - eta_minus) / (2.0 * dt_d)
+        else:
+            heave_offset_z = 0.0
+            v_heave_z = 0.0
+
         position = Vector(
             (
                 cosine * tip.x - sine * tip.y,
                 sine * tip.x + cosine * tip.y,
-                tip.z,
+                tip.z + heave_offset_z,
             )
         )
         radius = max(1.0e-6, math.hypot(position.x, position.y))
@@ -546,7 +612,7 @@ def run_feed_animation(config: dict | None = None) -> None:
                 (
                     rng.uniform(-0.08, 0.08),
                     rng.uniform(-0.08, 0.08),
-                    -downward_speed + rng.uniform(-0.16, 0.10),
+                    -downward_speed + rng.uniform(-0.16, 0.10) + v_heave_z,
                 )
             )
         )
@@ -614,6 +680,7 @@ def run_feed_animation(config: dict | None = None) -> None:
     scene["feed_current_speed_m_s"] = current_speed
     scene["feed_wave_height_m"] = wave_height
     scene["feed_spreader_z_offset"] = spreader_z_offset
+    scene["feed_spreader_heave_rao"] = spreader_heave_rao
     scene["feed_water_level_z"] = water_level_z
 
     print(
@@ -624,5 +691,6 @@ def run_feed_animation(config: dict | None = None) -> None:
         "CURRENT_SPEED", current_speed,
         "WAVE_HEIGHT", wave_height,
         "SPREADER_Z_OFFSET", spreader_z_offset,
+        "SPREADER_HEAVE_RAO", spreader_heave_rao,
         "OUTLET", tuple(round(v, 5) for v in tip),
     )

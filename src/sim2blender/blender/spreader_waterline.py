@@ -111,16 +111,26 @@ def create_vertical_ruler_mesh(height: float) -> bpy.types.Mesh:
     return mesh
 
 
-def update_waterline_text(text_obj: bpy.types.Object, z_offset: float, water_level_z: float) -> None:
-    """Update 3D text annotation showing water line lift and world elevation."""
+def update_waterline_text(
+    text_obj: bpy.types.Object,
+    z_offset: float,
+    water_level_z: float,
+    heave_rao: float = 0.5,
+    wave_height: float = 0.0,
+) -> None:
+    """Update 3D text annotation showing water line lift, world elevation, and heave RAO."""
     if text_obj and text_obj.type == "FONT":
         total_z = water_level_z + z_offset
-        text_obj.data.body = (
-            f"WATERLINE CALIBRATION\n"
-            f"Spreader Lift: +{z_offset:.3f} m\n"
-            f"Water Level:   {water_level_z:.2f} m\n"
-            f"Spreader Z:    {total_z:.3f} m"
-        )
+        lines = [
+            "WATERLINE CALIBRATION",
+            f"Spreader Lift: +{z_offset:.3f} m",
+            f"Water Level:   {water_level_z:.2f} m",
+            f"Spreader Z:    {total_z:.3f} m",
+        ]
+        if wave_height > 0.0:
+            heave_amp = heave_rao * (wave_height / 2.0)
+            lines.append(f"Heave RAO:     {heave_rao:.2f} (±{heave_amp:.3f} m)")
+        text_obj.data.body = "\n".join(lines)
 
 
 def find_spreader_bottom_z(root_obj: bpy.types.Object) -> float:
@@ -180,6 +190,10 @@ def visualize_spreader_waterline(
     scene: bpy.types.Scene | None = None,
     setup_interactive_ui: bool = True,
     setup_camera_and_lighting: bool = True,
+    heave_rao: float = 0.5,
+    wave_height: float = 0.0,
+    wave_period: float = 5.0,
+    animate_heave: bool = False,
 ) -> dict:
     """Build or update a complete spreader waterline visualization scene in Blender.
 
@@ -230,6 +244,21 @@ def visualize_spreader_waterline(
     root_obj.location = (0.0, 0.0, total_z)
     root_obj["waterline_z_offset"] = float(z_offset)
     root_obj["water_level_z"] = float(water_level_z)
+    root_obj["spreader_heave_rao"] = float(heave_rao)
+
+    # Animate heave motion across frames if requested
+    if (animate_heave or wave_height > 0.0) and heave_rao > 0.0 and wave_height > 0.0:
+        target_scene.frame_start = 1
+        target_scene.frame_end = 100
+        fps = target_scene.render.fps / target_scene.render.fps_base
+        omega = 2.0 * math.pi / max(wave_period, 0.1)
+        amp = wave_height / 2.0
+        for f in range(target_scene.frame_start, target_scene.frame_end + 1):
+            t = (f - target_scene.frame_start) / fps
+            heave_z = total_z + heave_rao * amp * math.cos(-omega * t)
+            root_obj.location = (0.0, 0.0, heave_z)
+            root_obj.keyframe_insert("location", frame=f)
+        target_scene.frame_set(1)
 
     # Ensure spreader objects are parented to the root controller
     if spreader_still is not None and spreader_still.parent != root_obj:
@@ -293,17 +322,16 @@ def visualize_spreader_waterline(
     # 6. 3D Text Annotation
     text_obj = bpy.data.objects.get(TEXT_OBJ_NAME)
     if text_obj is None:
-        curve_text = bpy.data.curves.new(type="FONT", name=TEXT_OBJ_NAME)
-        curve_text.size = 0.11
-        curve_text.extrude = 0.008
-        text_obj = bpy.data.objects.new(TEXT_OBJ_NAME, curve_text)
-        text_mat = get_or_create_accent_material("Waterline_Text_Mat", (1.0, 0.95, 0.8, 1.0), emission=2.5)
-        text_obj.data.materials.append(text_mat)
+        text_data = bpy.data.curves.new(name=TEXT_OBJ_NAME, type="FONT")
+        text_obj = bpy.data.objects.new(TEXT_OBJ_NAME, text_data)
+        text_data.size = 0.11
+        accent_mat = get_or_create_accent_material("Spreader_Waterline_Text_Mat", (0.2, 0.9, 1.0, 1.0), emission=2.5)
+        text_obj.data.materials.append(accent_mat)
         col.objects.link(text_obj)
 
-    text_obj.location = (1.4, -0.6, water_level_z + 0.15)
-    text_obj.rotation_euler = (math.radians(90.0), 0.0, math.radians(45.0))
-    update_waterline_text(text_obj, z_offset, water_level_z)
+    text_obj.location = (-1.8, -1.8, water_level_z + 0.15)
+    text_obj.rotation_euler = (math.radians(65), 0.0, math.radians(-30))
+    update_waterline_text(text_obj, z_offset, water_level_z, heave_rao=heave_rao, wave_height=wave_height)
 
     # 7. Vertical Measurement Ruler
     ruler_obj = bpy.data.objects.get(RULER_OBJ_NAME)
@@ -480,6 +508,7 @@ class VIEW3D_PT_SpreaderWaterlinePanel(bpy.types.Panel):
         box.label(text="Waterline Lift Calibration", icon="RNDCURVE")
         box.prop(scene, "sim2blender_spreader_z_offset", text="Lift Offset (Z)")
         box.prop(scene, "sim2blender_water_level_z", text="Water Level (Z)")
+        box.prop(scene, "sim2blender_spreader_heave_rao", text="Heave RAO")
 
         row = box.row(align=True)
         row.operator("sim2blender.set_default_waterline", text="Default (+0.52m)", icon="LOOP_FORWARDS")
@@ -528,6 +557,17 @@ def register_interactive_waterline_ui():
             precision=2,
             unit="LENGTH",
             update=_on_water_level_update,
+        )
+
+    if not hasattr(bpy.types.Scene, "sim2blender_spreader_heave_rao"):
+        bpy.types.Scene.sim2blender_spreader_heave_rao = bpy.props.FloatProperty(
+            name="Heave RAO",
+            description="Response Amplitude Operator for wave-induced spreader vertical motion",
+            default=0.5,
+            min=0.0,
+            max=2.0,
+            step=5,
+            precision=2,
         )
 
     for cls in _CLASSES:

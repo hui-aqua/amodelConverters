@@ -117,6 +117,10 @@ def run_fish_feeding_animation(config: dict | None = None) -> None:
     seed = int(cfg.get("random_seed", RANDOM_SEED))
     species_name = str(cfg.get("species", "Atlantic salmon"))
 
+    tail_motion = bool(cfg.get("tail_motion", True))
+    tail_amp = float(cfg.get("tail_amplitude_m", 0.065))
+    tail_freq = float(cfg.get("tail_frequency_hz", 2.2))
+
     if bpy.context.mode != "OBJECT" and bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -169,6 +173,15 @@ def run_fish_feeding_animation(config: dict | None = None) -> None:
         fish_obj.scale = (scale_ratio, scale_ratio, scale_ratio)
         fish_obj["fish_species"] = species_name
         fish_obj["fish_length_m"] = length_i
+        if tail_motion:
+            from sim2blender.blender.fish.tail_motion import apply_fish_tail_motion
+            apply_fish_tail_motion(
+                fish_obj,
+                amplitude_m=tail_amp * (length_i / mean_length),
+                frequency_hz=tail_freq * (cruise_speed_i / (cruise_speed_bl * mean_length)),
+                phase_offset=rng.uniform(0.0, math.tau),
+                wavelength_m=length_i * 1.0,
+            )
         fish_objects.append(fish_obj)
 
         pos = enclosure.sample(rng, clearance_i)

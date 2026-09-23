@@ -411,6 +411,21 @@ class SIM2BLENDER_OT_ToggleWaterSurface(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class SIM2BLENDER_OT_SaveCheckedScene(bpy.types.Operator):
+    """Save the checked preview scene (Ctrl+S) so the scene build will inherit calibrated positions and colors."""
+    bl_idname = "sim2blender.save_checked_scene"
+    bl_label = "Save Checked Model Scene"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        if bpy.data.filepath:
+            bpy.ops.wm.save_mainfile()
+            self.report({"INFO"}, f"Saved checked model file: {Path(bpy.data.filepath).name}. Ready for scene build!")
+        else:
+            self.report({"WARNING"}, "No filepath set for checked scene. Use File > Save As.")
+        return {"FINISHED"}
+
+
 class VIEW3D_PT_Sim2BlenderModelInspector(bpy.types.Panel):
     """Interactive sidebar panel in 3D View to inspect model positions, dimensions, and colors."""
     bl_space_type = "VIEW_3D"
@@ -428,6 +443,14 @@ class VIEW3D_PT_Sim2BlenderModelInspector(bpy.types.Panel):
             o for o in bpy.data.objects
             if o.get("is_preview_obj") or o.get("is_preview_cage") or o.get("is_preview_frame")
         ]
+
+        # Checked file banner & quick save button
+        if bpy.data.filepath:
+            box_file = layout.box()
+            box_file.label(text=f"Checked File: {Path(bpy.data.filepath).name}", icon="FILE_BLEND")
+            r_save = box_file.row(align=True)
+            r_save.operator("sim2blender.save_checked_scene", text="Save Checked Scene (Ctrl+S)", icon="FILE_TICK")
+            box_file.label(text="Build Scene will automatically use this file.", icon="INFO")
 
         box_header = layout.box()
         box_header.label(text=f"Loaded Models ({len(preview_objects)})", icon="OBJECT_DATA")
@@ -484,6 +507,7 @@ _INSPECTOR_CLASSES = (
     SIM2BLENDER_OT_FocusModel,
     SIM2BLENDER_OT_CopyModelTransform,
     SIM2BLENDER_OT_ToggleWaterSurface,
+    SIM2BLENDER_OT_SaveCheckedScene,
     VIEW3D_PT_Sim2BlenderModelInspector,
 )
 
@@ -510,8 +534,31 @@ def unregister_model_inspector_ui() -> None:
 # Main Entry Point: build_model_preview_scene
 # -----------------------------------------------------------------------------
 
+def remove_default_startup_cube() -> None:
+    """Remove Blender's default startup cube, light, and camera so they don't clutter the preview."""
+    for obj in list(bpy.data.objects):
+        if obj.get("is_preview_obj", False):
+            continue
+        # Remove default Cube / startup objects
+        if obj.name == "Cube" or obj.name.startswith("Cube."):
+            bpy.data.objects.remove(obj, do_unlink=True)
+        elif obj.name in ("Light", "Camera") and not obj.name.startswith("Preview_"):
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+    # Clean up orphan meshes
+    for mesh in list(bpy.data.meshes):
+        if (mesh.name == "Cube" or mesh.name.startswith("Cube.")) and mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+
+    # Remove empty default Collection if unused
+    default_col = bpy.data.collections.get("Collection")
+    if default_col and not default_col.objects and not default_col.children:
+        bpy.data.collections.remove(default_col)
+
+
 def build_model_preview_scene(config: dict[str, Any]) -> dict[str, Any]:
     """Construct full pre-build model preview scene with cage, OBJs, and lighting."""
+    remove_default_startup_cube()
     col = _ensure_collection(PREVIEW_COLLECTION_NAME)
 
     created_cage_objs = []
@@ -580,4 +627,63 @@ def build_model_preview_scene(config: dict[str, Any]) -> dict[str, Any]:
         "total_models": len(all_preview_objs),
     }
 
+    save_path = config.get("save_blend_path")
+    if save_path:
+        save_file = Path(save_path).resolve()
+        save_file.parent.mkdir(parents=True, exist_ok=True)
+        bpy.ops.wm.save_as_mainfile(filepath=str(save_file))
+        summary["saved_blend_file"] = str(save_file)
+
     return summary
+
+
+def import_checked_models_from_blend(
+    checked_blend_path: str | Path,
+    target_collection: bpy.types.Collection | None = None,
+) -> list[bpy.types.Object]:
+    """Import user-calibrated 3D models and materials from a checked Blender file.
+
+    Preserves user-customized transforms (location, rotation, scale), materials,
+    colors, shaders, and textures while omitting temporary preview scaffolding
+    (preview cage mesh, preview water plane, studio lights, preview camera).
+    """
+    path = Path(checked_blend_path).resolve()
+    if not path.is_file():
+        return []
+
+    target_col = target_collection or bpy.context.scene.collection
+
+    # Scaffolding objects to omit (the pipeline builds the real physical versions)
+    scaffolding_prefixes = ("Cage_", "Preview_", "Constraint node")
+
+    def _is_scaffolding(name: str) -> bool:
+        if any(name.startswith(pfx) for pfx in scaffolding_prefixes):
+            return True
+        if name in ("Cube", "Light", "Camera", "Membrane cage") or name.startswith("Cube.") or name.startswith("Light.") or name.startswith("Camera."):
+            return True
+        return False
+
+    # If the file is already open in Blender memory, reuse existing objects
+    current_file = Path(bpy.data.filepath).resolve() if bpy.data.filepath else None
+    if current_file and current_file == path:
+        matching_objs = [obj for obj in bpy.data.objects if not _is_scaffolding(obj.name)]
+        for obj in matching_objs:
+            if obj.name not in target_col.objects:
+                target_col.objects.link(obj)
+            obj["is_calibrated"] = True
+        return matching_objs
+
+    with bpy.data.libraries.load(str(path), link=False) as (data_from, data_to):
+        data_to.objects = [
+            obj_name for obj_name in data_from.objects
+            if not _is_scaffolding(obj_name)
+        ]
+
+    imported_objs = []
+    for obj in data_to.objects:
+        if obj.name not in target_col.objects:
+            target_col.objects.link(obj)
+        obj["is_calibrated"] = True
+        imported_objs.append(obj)
+
+    return imported_objs

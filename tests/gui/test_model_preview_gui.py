@@ -47,7 +47,7 @@ class TestModelPreviewGui(unittest.TestCase):
         """Verify the Check Models button exists with correct text, name, and tooltip."""
         btn = self.window.check_models_button
         self.assertIsNotNone(btn)
-        self.assertIn("Check Models & Colors", btn.text())
+        self.assertIn("Check Model in Blender", btn.text())
         self.assertEqual(btn.objectName(), "CheckModels")
         self.assertIn("preview", btn.toolTip().lower())
 
@@ -96,6 +96,29 @@ class TestModelPreviewGui(unittest.TestCase):
         self.assertIn("3D MODEL PRE-BUILD CHECK & PREVIEW", log_text)
         self.assertIn("winch_cage.amodel", log_text)
 
+    def test_app_icon_configured(self):
+        """Verify the window and application icon is configured from AKVAgroup fish icon asset."""
+        self.assertFalse(self.window.windowIcon().isNull())
+        self.assertFalse(APP.windowIcon().isNull())
+
+    @patch("PySide6.QtCore.QProcess.start")
+    def test_start_build_incorporates_checked_blend(self, mock_start):
+        """Verify start_build detects .checked.blend and passes it to PipelineJob."""
+        model_path = Path(__file__).resolve().parents[2] / "examples" / "models" / "winch_cage.amodel"
+        self.window.model.setText(str(model_path))
+        until(lambda: not self.window.workers)
+
+        out_blend = self.folder / "scene_output.blend"
+        checked_blend = self.folder / "scene_output.checked.blend"
+        checked_blend.write_text("dummy blend content", encoding="utf-8")
+        self.window.output.setText(str(out_blend))
+
+        self.window.start_build()
+        self.assertIsNotNone(self.window.job)
+        self.assertEqual(Path(self.window.job.checked_blend_path).resolve(), checked_blend.resolve())
+        self.assertIn("Incorporating calibrated models & materials", self.window.log.toPlainText())
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -56,7 +56,7 @@ Opening the result does not start a render. Press Space in Blender's Timeline to
 
 ## Pre-Build 3D Model & Color Check
 
-Before running a simulation build (which may take several minutes to bake cloth, particles, and hydrodynamics), click **Check Models & Colors 🔍** in Column 3 above the build button:
+Before running a simulation build (which may take several minutes to bake cloth, particles, and hydrodynamics), click **Check Model in Blender 🔍** in Column 3 above the build button:
 - **Instant Lightweight Preview**: Launches interactive Blender in ~1-2 seconds with the reference cage geometry, water level plane, and all imported OBJ models (spreader rotor/base and any extra OBJ equipment).
 - **Verify Positioning & Elevation**: Check whether models sit at the correct coordinates and waterline elevation.
 - **Verify Materials & Colors**: Renders in Material Preview (EEVEE) with 3-point studio lighting; missing texture files or invalid materials are automatically reported.

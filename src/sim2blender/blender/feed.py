@@ -97,15 +97,16 @@ def find_or_import_spreader_move_object(
     z_offset: float = SPREADER_Z_OFFSET,
     water_level_z: float = WATER_LEVEL_Z,
 ) -> bpy.types.Object:
-    """Find existing 'spreader_move' or import from obj paths, applying waterline Z offset."""
+    """Find existing 'spreader_move'/'Spreader_Rotor' or import from obj paths, applying waterline Z offset."""
     total_z = float(water_level_z) + float(z_offset)
-    obj = bpy.data.objects.get("spreader_move")
-    if obj is not None:
-        return obj
+    for name in ("spreader_move", "Spreader_Rotor"):
+        obj = bpy.data.objects.get(name)
+        if obj is not None:
+            return obj
 
     for o in bpy.data.objects:
         name_lower = o.name.lower()
-        if "spreader" in name_lower and "move" in name_lower:
+        if ("spreader" in name_lower and "move" in name_lower) or ("spreader" in name_lower and "rotor" in name_lower):
             return o
 
     def _resolve_spreader(path_val: str | Path | None, default_path: str) -> Path:
@@ -124,8 +125,16 @@ def find_or_import_spreader_move_object(
             return def_p.resolve()
         return candidate.resolve()
 
+    still_obj = bpy.data.objects.get("spreader_still") or bpy.data.objects.get("Spreader_Base")
+    if still_obj is None:
+        for o in bpy.data.objects:
+            nl = o.name.lower()
+            if ("spreader" in nl and "still" in nl) or ("spreader" in nl and "base" in nl):
+                still_obj = o
+                break
+
     still_p = _resolve_spreader(still_obj_path, DEFAULT_SPREADER_STILL_PATH)
-    if still_p.is_file() and not bpy.data.objects.get("spreader_still"):
+    if still_p.is_file() and still_obj is None:
         imported_still = import_obj_file(still_p)
         for o in imported_still:
             if o.type == "MESH":
@@ -141,9 +150,10 @@ def find_or_import_spreader_move_object(
                 o.location.z = total_z
                 return o
 
-    obj = bpy.data.objects.get("spreader_move")
-    if obj is not None:
-        return obj
+    for name in ("spreader_move", "Spreader_Rotor"):
+        obj = bpy.data.objects.get(name)
+        if obj is not None:
+            return obj
 
     available = [o.name for o in bpy.data.objects if "spreader" in o.name.lower()]
     hint = f" Found related objects: {available}" if available else ""
@@ -458,16 +468,22 @@ def run_feed_animation(config: dict | None = None) -> None:
             z_offset=spreader_z_offset,
             water_level_z=water_level_z,
         )
-        still_obj = bpy.data.objects.get("spreader_still")
-        if still_obj is not None:
-            if still_obj.parent is not None:
-                still_obj.parent = None
-            still_obj.location = (0.0, 0.0, total_z_offset)
+        still_obj = bpy.data.objects.get("spreader_still") or bpy.data.objects.get("Spreader_Base")
+        if still_obj is None:
+            for o in bpy.data.objects:
+                nl = o.name.lower()
+                if ("spreader" in nl and "still" in nl) or ("spreader" in nl and "base" in nl):
+                    still_obj = o
+                    break
 
-        if spreader_move.parent is not None:
-            spreader_move.parent = None
-        spreader_move.location = (0.0, 0.0, total_z_offset)
-        bpy.context.view_layer.update()
+        # Capture base positions (user-calibrated from checked blend or default imported)
+        rotor_base_loc = spreader_move.matrix_world.translation.copy()
+        still_base_loc = (
+            still_obj.matrix_world.translation.copy()
+            if still_obj is not None
+            else Vector((rotor_base_loc.x, rotor_base_loc.y, total_z_offset))
+        )
+        orig_move_rot = spreader_move.rotation_euler.copy()
 
         tip = find_spreader_outlet_tip(spreader_move)
 
@@ -480,17 +496,17 @@ def run_feed_animation(config: dict | None = None) -> None:
         rotor.empty_display_type = "ARROWS"
         rotor.empty_display_size = 0.12
         rotor.show_in_front = True
-        rotor.location = (0.0, 0.0, total_z_offset)
+        rotor.location = rotor_base_loc
         rotor.rotation_euler = (0.0, 0.0, 0.0)
         rotor.scale = (1.0, 1.0, 1.0)
         system_collection.objects.link(rotor)
 
         # Parent spreader_move to rotor.
-        # Since rotor is positioned at total_z_offset, local location (0, 0, 0)
-        # places spreader_move at world Z = total_z_offset (avoiding double lifting).
+        # Since rotor is positioned at rotor_base_loc, local location (0, 0, 0)
+        # preserves spreader_move at its calibrated world position.
         spreader_move.parent = rotor
         spreader_move.location = (0.0, 0.0, 0.0)
-        spreader_move.rotation_euler = (0.0, 0.0, 0.0)
+        spreader_move.rotation_euler = orig_move_rot
         spreader_move.scale = (1.0, 1.0, 1.0)
 
         outlet = bpy.data.objects.new("FishFeed_Outlet_30kgmin", None)
@@ -498,8 +514,8 @@ def run_feed_animation(config: dict | None = None) -> None:
         outlet.empty_display_size = 0.035
         outlet.show_in_front = True
         outlet.parent = rotor
-        # Relative to rotor at (0, 0, total_z_offset), local Z is tip.z - total_z_offset
-        outlet.location = (tip.x, tip.y, tip.z - total_z_offset)
+        # Relative to rotor at rotor_base_loc:
+        outlet.location = (tip.x - rotor_base_loc.x, tip.y - rotor_base_loc.y, tip.z - rotor_base_loc.z)
         outlet.rotation_euler = (0.0, math.pi / 2.0, 0.0)
         outlet.scale = (1.0, 1.0, 1.0)
         system_collection.objects.link(outlet)
@@ -513,20 +529,16 @@ def run_feed_animation(config: dict | None = None) -> None:
         outlet = bpy.data.objects.get("FishFeed_Outlet_30kgmin")
         if system_collection is None or outlet is None:
             raise RuntimeError("The existing feed setup is incomplete")
-        spreader_move = bpy.data.objects.get("spreader_move")
+        spreader_move = bpy.data.objects.get("spreader_move") or bpy.data.objects.get("Spreader_Rotor")
+        still_obj = bpy.data.objects.get("spreader_still") or bpy.data.objects.get("Spreader_Base")
+        rotor_base_loc = rotor.location.copy()
         if spreader_move is not None:
             if spreader_move.parent != rotor:
                 spreader_move.parent = rotor
             spreader_move.location = (0.0, 0.0, 0.0)
-            spreader_move.rotation_euler = (0.0, 0.0, 0.0)
-            spreader_move.scale = (1.0, 1.0, 1.0)
-        still_obj = bpy.data.objects.get("spreader_still")
-        if still_obj is not None:
-            still_obj.location = (0.0, 0.0, total_z_offset)
-        rotor.location = (0.0, 0.0, total_z_offset)
-        bpy.context.view_layer.update()
+        still_base_loc = still_obj.location.copy() if still_obj is not None else rotor_base_loc
         tip = find_spreader_outlet_tip(spreader_move) if spreader_move else outlet.matrix_world.translation.copy()
-        outlet.location = (tip.x, tip.y, tip.z - total_z_offset)
+        outlet.location = (tip.x - rotor_base_loc.x, tip.y - rotor_base_loc.y, tip.z - rotor_base_loc.z)
 
     rotor["rotation_rpm"] = rpm
     rotor["angular_speed_rad_s"] = angular_speed
@@ -537,12 +549,12 @@ def run_feed_animation(config: dict | None = None) -> None:
     rotation_driver.expression = f"(frame-{frame_start:.8f})*{angular_speed / fps:.12f}"
 
     # Spreader heave motion keyframing according to local wave elevation (RAO = 0.5)
-    still_obj = bpy.data.objects.get("spreader_still")
+    still_obj = bpy.data.objects.get("spreader_still") or bpy.data.objects.get("Spreader_Base")
     if wave_height > 0.0 and spreader_heave_rao > 0.0:
         for f_idx in range(int(frame_start), int(frame_end) + 1):
             t_sec = f_idx / fps
             eta_val = calculate_wave_elevation(
-                0.0, 0.0, t_sec,
+                rotor_base_loc.x, rotor_base_loc.y, t_sec,
                 wave_height=wave_height,
                 wave_period=wave_period,
                 wave_length=wave_length,
@@ -550,16 +562,17 @@ def run_feed_animation(config: dict | None = None) -> None:
                 water_level=water_level_z,
                 **(spectrum_options or {}),
             ) - water_level_z
-            heave_z = total_z_offset + spreader_heave_rao * eta_val
-            rotor.location = (0.0, 0.0, heave_z)
+            heave_z = rotor_base_loc.z + spreader_heave_rao * eta_val
+            rotor.location = (rotor_base_loc.x, rotor_base_loc.y, heave_z)
             rotor.keyframe_insert("location", frame=f_idx)
             if still_obj is not None:
-                still_obj.location = (0.0, 0.0, heave_z)
+                still_z = still_base_loc.z + spreader_heave_rao * eta_val
+                still_obj.location = (still_base_loc.x, still_base_loc.y, still_z)
                 still_obj.keyframe_insert("location", frame=f_idx)
     else:
-        rotor.location = (0.0, 0.0, total_z_offset)
+        rotor.location = rotor_base_loc
         if still_obj is not None:
-            still_obj.location = (0.0, 0.0, total_z_offset)
+            still_obj.location = still_base_loc
 
     old_particle_collection = bpy.data.collections.get("FishFeed_Proxy_Particles")
     if old_particle_collection is not None:
@@ -588,7 +601,7 @@ def run_feed_animation(config: dict | None = None) -> None:
 
         if wave_height > 0.0 and spreader_heave_rao > 0.0:
             eta_emit = calculate_wave_elevation(
-                0.0, 0.0, emit_time_global,
+                rotor_base_loc.x, rotor_base_loc.y, emit_time_global,
                 wave_height=wave_height,
                 wave_period=wave_period,
                 wave_length=wave_length,
@@ -600,7 +613,7 @@ def run_feed_animation(config: dict | None = None) -> None:
 
             dt_d = 0.001
             eta_plus = calculate_wave_elevation(
-                0.0, 0.0, emit_time_global + dt_d,
+                rotor_base_loc.x, rotor_base_loc.y, emit_time_global + dt_d,
                 wave_height=wave_height,
                 wave_period=wave_period,
                 wave_length=wave_length,
@@ -609,7 +622,7 @@ def run_feed_animation(config: dict | None = None) -> None:
                 **(spectrum_options or {}),
             ) - water_level_z
             eta_minus = calculate_wave_elevation(
-                0.0, 0.0, emit_time_global - dt_d,
+                rotor_base_loc.x, rotor_base_loc.y, emit_time_global - dt_d,
                 wave_height=wave_height,
                 wave_period=wave_period,
                 wave_length=wave_length,
@@ -622,16 +635,21 @@ def run_feed_animation(config: dict | None = None) -> None:
             heave_offset_z = 0.0
             v_heave_z = 0.0
 
+        rel_tip_x = tip.x - rotor_base_loc.x
+        rel_tip_y = tip.y - rotor_base_loc.y
+        cur_rot_x = cosine * rel_tip_x - sine * rel_tip_y
+        cur_rot_y = sine * rel_tip_x + cosine * rel_tip_y
+
         position = Vector(
             (
-                cosine * tip.x - sine * tip.y,
-                sine * tip.x + cosine * tip.y,
+                rotor_base_loc.x + cur_rot_x,
+                rotor_base_loc.y + cur_rot_y,
                 tip.z + heave_offset_z,
             )
         )
-        radius = max(1.0e-6, math.hypot(position.x, position.y))
-        radial = Vector((position.x / radius, position.y / radius, 0.0))
-        tangent = Vector((-position.y / radius, position.x / radius, 0.0))
+        radius = max(1.0e-6, math.hypot(cur_rot_x, cur_rot_y))
+        radial = Vector((cur_rot_x / radius, cur_rot_y / radius, 0.0))
+        tangent = Vector((-cur_rot_y / radius, cur_rot_x / radius, 0.0))
 
         position += tangent * rng.uniform(-0.014, 0.014)
         position.z += rng.uniform(-0.014, 0.014)
@@ -723,4 +741,5 @@ def run_feed_animation(config: dict | None = None) -> None:
         "SPREADER_Z_OFFSET", spreader_z_offset,
         "SPREADER_HEAVE_RAO", spreader_heave_rao,
         "OUTLET", tuple(round(v, 5) for v in tip),
+        "ROTOR_BASE", tuple(round(v, 5) for v in rotor_base_loc),
     )

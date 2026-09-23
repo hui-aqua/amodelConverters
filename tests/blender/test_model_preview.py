@@ -18,6 +18,7 @@ try:
         build_model_preview_scene,
         create_reference_cage_mesh,
         create_water_surface_plane,
+        import_checked_models_from_blend,
         inspect_object_materials,
         get_object_bounds_and_dimensions,
         load_preview_obj_model,
@@ -26,6 +27,7 @@ try:
         PREVIEW_COLLECTION_NAME,
         WATER_PLANE_NAME,
     )
+    from sim2blender.workflows.unified_pipeline import build_unified_scene
     HAS_BLENDER = True
 except ImportError:
     HAS_BLENDER = False
@@ -159,7 +161,16 @@ class ModelPreviewTests(unittest.TestCase):
             "setup_lighting": True,
             "setup_ui": True,
         }
+        # Create a default Cube object in the scene before building preview
+        cube_mesh = bpy.data.meshes.new("Cube")
+        cube_obj = bpy.data.objects.new("Cube", cube_mesh)
+        bpy.context.scene.collection.objects.link(cube_obj)
+        self.assertIsNotNone(bpy.data.objects.get("Cube"))
+
         summary = build_model_preview_scene(config)
+
+        # Verify default Cube was removed
+        self.assertIsNone(bpy.data.objects.get("Cube"), "Default startup Cube must be removed")
 
         self.assertGreaterEqual(summary["total_models"], 2)
         self.assertTrue(len(summary["cage_objects"]) >= 1)
@@ -202,6 +213,170 @@ class ModelPreviewTests(unittest.TestCase):
         res_copy = bpy.ops.sim2blender.copy_model_transform(object_name=imported[0].name)
         self.assertEqual(res_copy, {"FINISHED"})
         self.assertIn("position=", bpy.context.scene.get("last_copied_transform", ""))
+
+    def test_import_checked_models_from_blend(self):
+        """Test appending calibrated objects and custom materials from a .checked.blend file."""
+        checked_blend = self.folder / "test.checked.blend"
+        config = {
+            "model_path": str(self.dummy_model),
+            "water_level_z": 0.0,
+            "include_water": True,
+            "obj_models": [
+                {
+                    "path": str(self.dummy_obj),
+                    "name": "Custom_Winch",
+                    "position": [0.0, 0.0, 0.0],
+                }
+            ],
+            "save_blend_path": str(checked_blend),
+            "setup_ui": False,
+        }
+        build_model_preview_scene(config)
+        self.assertTrue(checked_blend.is_file())
+
+        # Open the checked file, modify position, rotation, and material base color
+        bpy.ops.wm.open_mainfile(filepath=str(checked_blend))
+        winch = bpy.data.objects.get("Custom_Winch")
+        self.assertIsNotNone(winch)
+        winch.location = Vector((2.5, 3.5, 1.2))
+        winch.rotation_euler = Vector((0.0, 0.0, 0.785))
+
+        # Assign a distinctive custom color to winch material
+        custom_mat = bpy.data.materials.new("Winch_Custom_Yellow")
+        custom_mat.use_nodes = True
+        bsdf = custom_mat.node_tree.nodes.get("Principled BSDF")
+        self.assertIsNotNone(bsdf)
+        bsdf.inputs["Base Color"].default_value = (0.95, 0.85, 0.10, 1.0)
+        winch.data.materials.clear()
+        winch.data.materials.append(custom_mat)
+
+        bpy.ops.wm.save_as_mainfile(filepath=str(checked_blend))
+
+        # Start a clean scene and import calibrated models
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        test_scene = bpy.data.scenes.new("TargetScene")
+        bpy.context.window.scene = test_scene
+        equip_col = bpy.data.collections.new("Equipment")
+        test_scene.collection.children.link(equip_col)
+
+        imported = import_checked_models_from_blend(checked_blend, equip_col)
+        self.assertTrue(len(imported) >= 1)
+        imported_winch = next((o for o in imported if o.name == "Custom_Winch"), None)
+        self.assertIsNotNone(imported_winch)
+
+        # Check location, rotation, and calibration flag
+        self.assertAlmostEqual(imported_winch.location.x, 2.5, places=3)
+        self.assertAlmostEqual(imported_winch.location.y, 3.5, places=3)
+        self.assertAlmostEqual(imported_winch.location.z, 1.2, places=3)
+        self.assertAlmostEqual(imported_winch.rotation_euler.z, 0.785, places=3)
+        self.assertTrue(imported_winch.get("is_calibrated", False))
+
+        # Check material and color
+        self.assertEqual(len(imported_winch.data.materials), 1)
+        mat = imported_winch.data.materials[0]
+        bsdf_node = mat.node_tree.nodes.get("Principled BSDF")
+        self.assertIsNotNone(bsdf_node)
+        col = tuple(round(v, 2) for v in bsdf_node.inputs["Base Color"].default_value)
+        self.assertEqual(col, (0.95, 0.85, 0.10, 1.0))
+
+        # Verify scaffolding (cage, preview water, lights) were NOT imported
+        self.assertIsNone(bpy.data.objects.get("Cage_Membrane_Preview"))
+        self.assertIsNone(bpy.data.objects.get(WATER_PLANE_NAME))
+        self.assertIsNone(bpy.data.objects.get("Preview_Key_Sun"))
+
+    def test_unified_pipeline_build_with_checked_blend(self):
+        """Test that build_unified_scene incorporates calibrated objects and positions."""
+        checked_blend = self.folder / "cage_scene.checked.blend"
+        final_blend = self.folder / "cage_scene.blend"
+
+        # 1. Create dummy spreader obj files
+        spreader_move_obj = _make_dummy_obj(self.folder / "spreader_move.obj")
+        spreader_still_obj = _make_dummy_obj(self.folder / "spreader_still.obj")
+
+        preview_cfg = {
+            "model_path": str(self.dummy_model),
+            "water_level_z": 0.0,
+            "include_water": True,
+            "obj_models": [
+                {
+                    "path": str(spreader_move_obj),
+                    "name": "Spreader_Rotor",
+                    "position": [0.0, 0.0, 0.52],
+                },
+                {
+                    "path": str(spreader_still_obj),
+                    "name": "Spreader_Base",
+                    "position": [0.0, 0.0, 0.52],
+                },
+            ],
+            "save_blend_path": str(checked_blend),
+            "setup_ui": False,
+        }
+        build_model_preview_scene(preview_cfg)
+
+        # 2. Simulate user adjusting Spreader position in Blender to (1.5, -2.0, 1.0) and changing color
+        bpy.ops.wm.open_mainfile(filepath=str(checked_blend))
+        rotor_obj = bpy.data.objects.get("Spreader_Rotor")
+        still_obj = bpy.data.objects.get("Spreader_Base")
+        self.assertIsNotNone(rotor_obj)
+        self.assertIsNotNone(still_obj)
+
+        calibrated_pos = Vector((1.5, -2.0, 1.0))
+        rotor_obj.location = calibrated_pos
+        still_obj.location = calibrated_pos
+
+        # Change rotor material color to bright red
+        rotor_mat = bpy.data.materials.new("Spreader_Red_Calibrated")
+        rotor_mat.use_nodes = True
+        bsdf = rotor_mat.node_tree.nodes.get("Principled BSDF")
+        bsdf.inputs["Base Color"].default_value = (0.9, 0.05, 0.05, 1.0)
+        rotor_obj.data.materials.clear()
+        rotor_obj.data.materials.append(rotor_mat)
+
+        bpy.ops.wm.save_as_mainfile(filepath=str(checked_blend))
+
+        # 3. Build scene using unified pipeline with checked_blend_path
+        pipeline_cfg = {
+            "model": str(self.dummy_model),
+            "output": str(final_blend),
+            "membrane_ids": [1],
+            "frames": 5,
+            "checked_blend_path": str(checked_blend),
+            "feed_animation": {
+                "enabled": True,
+                "rpm": 30.0,
+                "mass_flow_kg_min": 10.0,
+                "spreader_move_path": str(spreader_move_obj),
+                "spreader_still_path": str(spreader_still_obj),
+            },
+            "environment": {"enabled": False},
+        }
+        build_unified_scene(pipeline_cfg)
+        self.assertTrue(final_blend.is_file())
+
+        # 4. Open final build scene and verify calibrations are preserved
+        bpy.ops.wm.open_mainfile(filepath=str(final_blend))
+        final_rotor_feed = bpy.data.objects.get("Feed_Rotor_30RPM")
+        self.assertIsNotNone(final_rotor_feed)
+        # Feed_Rotor_30RPM should be centered at calibrated position (1.5, -2.0, 1.0)
+        self.assertAlmostEqual(final_rotor_feed.location.x, 1.5, places=2)
+        self.assertAlmostEqual(final_rotor_feed.location.y, -2.0, places=2)
+        self.assertAlmostEqual(final_rotor_feed.location.z, 1.0, places=2)
+
+        # Spreader_Rotor should retain its calibrated material
+        spreader_rotor = bpy.data.objects.get("Spreader_Rotor")
+        self.assertIsNotNone(spreader_rotor)
+        self.assertTrue(len(spreader_rotor.data.materials) >= 1)
+        r_mat = spreader_rotor.data.materials[0]
+        bsdf_node = r_mat.node_tree.nodes.get("Principled BSDF")
+        self.assertIsNotNone(bsdf_node)
+        col = tuple(round(v, 2) for v in bsdf_node.inputs["Base Color"].default_value)
+        self.assertEqual(col, (0.9, 0.05, 0.05, 1.0))
+
+        # Particles should exist
+        particles_col = bpy.data.collections.get("FishFeed_Proxy_Particles")
+        self.assertIsNotNone(particles_col)
+        self.assertGreater(len(particles_col.objects), 0)
 
 
 if __name__ == "__main__":

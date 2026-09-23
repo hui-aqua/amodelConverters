@@ -52,8 +52,10 @@ def parse_arguments() -> tuple[dict, bool]:
     parser.add_argument("--move-obj", help="Path to spreader_move.obj")
     parser.add_argument("--still-obj", help="Path to spreader_still.obj")
     parser.add_argument("--obj", action="append", help="Extra OBJ in format 'path' or 'path:name:x,y,z'")
+    parser.add_argument("--water-level", type=float, default=0.0, help="Water level Z (m)")
     parser.add_argument("--z-offset", type=float, default=0.52, help="Spreader lift offset (m)")
-    parser.add_argument("--water-level", type=float, default=0.0, help="Ocean water surface level Z (m)")
+    parser.add_argument("--save-blend", help="Path to save or open checked preview .blend file")
+    parser.add_argument("--force-rebuild", action="store_true", help="Force rebuilding preview scene from scratch even if checked blend exists")
     parser.add_argument("--no-ui", action="store_true", help="Do not register interactive N-panel UI")
 
     args = parser.parse_args(cli_args)
@@ -110,6 +112,11 @@ def parse_arguments() -> tuple[dict, bool]:
                 "position": p_pos,
             })
 
+    if args.save_blend:
+        config["save_blend_path"] = args.save_blend
+    if args.force_rebuild:
+        config["force_rebuild"] = True
+
     return config, args.no_ui
 
 
@@ -125,7 +132,25 @@ def main() -> None:
     print(f"  OBJ Models:     {len(config.get('obj_models', []))}")
     for m in config.get("obj_models", []):
         print(f"    - {m.get('name')}: {m.get('path')} @ {m.get('position')}")
+    if config.get("save_blend_path"):
+        print(f"  Checked Scene:  {config.get('save_blend_path')}")
     print("=" * 60 + "\n")
+
+    save_path = config.get("save_blend_path")
+    if save_path:
+        save_file = Path(save_path).resolve()
+        if save_file.is_file() and not config.get("force_rebuild", False):
+            print(f"Loading existing checked Blender file: {save_file}")
+            bpy.ops.wm.open_mainfile(filepath=str(save_file))
+            from sim2blender.blender.model_preview import (
+                register_model_inspector_ui,
+                setup_viewport_shading_material_preview,
+            )
+            if config.get("setup_ui", True):
+                register_model_inspector_ui()
+                setup_viewport_shading_material_preview()
+            print("Loaded saved model adjustments. Ready for visual inspection.")
+            return
 
     summary = build_model_preview_scene(config)
 
@@ -134,8 +159,11 @@ def main() -> None:
         print(f"  Cage: {summary['cage_objects']}")
     if summary["obj_objects"]:
         print(f"  OBJs: {summary['obj_objects']}")
+    if summary.get("saved_blend_file"):
+        print(f"  Saved to: {summary['saved_blend_file']}")
     print("Viewport configured to Material Preview (EEVEE). Ready for visual inspection.")
 
 
 if __name__ == "__main__":
     main()
+

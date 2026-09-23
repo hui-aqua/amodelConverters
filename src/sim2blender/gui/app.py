@@ -16,7 +16,7 @@ import re
 import sys
 
 from PySide6.QtCore import QProcess, QProcessEnvironment, QSettings, Qt, QThread, QTimer, Signal, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QPalette
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
@@ -32,6 +32,8 @@ from sim2blender.gui.theme import light_palette
 from sim2blender.gui.inspectors import Inspector, ResultsInspector
 from sim2blender.gui.config_tabs import ConfigTabsMixin
 
+APP_ICON_PATH = PROJECT_ROOT / 'assets' / 'logo' / 'AKVAgroup-fish-icon-black.png'
+
 
 class MainWindow(QMainWindow, ConfigTabsMixin):
     def __init__(self, settings_path=None):
@@ -42,6 +44,11 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             app.setPalette(palette)
         self.setPalette(palette)
         self.setWindowTitle('Sim2Blender — AquaSim scene builder & physics pipeline')
+        if APP_ICON_PATH.is_file():
+            icon = QIcon(str(APP_ICON_PATH))
+            self.setWindowIcon(icon)
+            if app is not None and app.windowIcon().isNull():
+                app.setWindowIcon(icon)
         self.resize(1380, 890)
         self.setMinimumSize(1120, 720)
         self.settings = QSettings(str(settings_path or PROJECT_ROOT / 'output' / 'gui-settings.ini'), QSettings.Format.IniFormat)
@@ -100,6 +107,16 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         main_layout.setSpacing(12)
 
         header = QHBoxLayout()
+        header.setSpacing(12)
+        if APP_ICON_PATH.is_file():
+            logo_label = QLabel()
+            pix = QPixmap(str(APP_ICON_PATH))
+            if not pix.isNull():
+                logo_label.setPixmap(
+                    pix.scaled(40, 40, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                )
+                header.addWidget(logo_label, 0, Qt.AlignmentFlag.AlignVCenter)
+
         title_v = QVBoxLayout()
         title = QLabel('Sim2Blender')
         title.setObjectName('Title')
@@ -388,7 +405,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         actions_box = QVBoxLayout()
         actions_box.setSpacing(8)
 
-        self.check_models_button = QPushButton('Check Models & Colors 🔍')
+        self.check_models_button = QPushButton('Check Model in Blender 🔍')
         self.check_models_button.setObjectName('CheckModels')
         self.check_models_button.setEnabled(False)
         self.check_models_button.setToolTip('Preview imported OBJ models and cage in Blender to verify position, scale, materials, and colors before running full scene build')
@@ -1236,10 +1253,18 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'show_counter': self.feedcam_show_counter.isChecked(),
                 }
 
+            out_path = Path(self.output.text().strip())
+            checked_blend = out_path.with_suffix('.checked.blend')
+            checked_blend_path = checked_blend if checked_blend.is_file() else getattr(self, 'last_checked_blend_path', None)
+            if checked_blend_path and not Path(checked_blend_path).is_file():
+                checked_blend_path = None
+
+            extra_objs = self.get_extra_obj_models() if hasattr(self, 'get_extra_obj_models') else []
+
             job = PipelineJob(
                 blender=Path(self.blender.text().strip()),
                 model=self.info.path,
-                output=Path(self.output.text().strip()),
+                output=out_path,
                 membrane_ids=self.selected_ids(),
                 beam_ids=self.selected_beam_ids(),
                 truss_ids=self.selected_truss_ids(),
@@ -1253,6 +1278,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                 fish_feeding=feeding_dict,
                 cinematic_camera=camera_dict,
                 feeding_camera=feeding_camera_dict,
+                checked_blend_path=checked_blend_path,
+                obj_models=extra_objs,
             )
 
             program, args = job.command()
@@ -1278,6 +1305,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self._save_current_settings()
 
         self.log.clear()
+        if getattr(job, 'checked_blend_path', None):
+            self.log.appendPlainText(f'⚙️ Incorporating calibrated models & materials from: {Path(job.checked_blend_path).name}\n')
         self.pending_line = ''
         self.decoder.reset()
         self.set_running(True)
@@ -1489,6 +1518,10 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             )
             return
 
+        out_txt = self.output.text().strip() if hasattr(self, 'output') else ''
+        checked_blend_path = Path(out_txt).with_suffix('.checked.blend') if out_txt else PROJECT_ROOT / 'output' / 'model_preview.checked.blend'
+        self.last_checked_blend_path = checked_blend_path
+
         # Pre-flight diagnostic report to GUI log
         self.log.appendPlainText('=' * 60)
         self.log.appendPlainText('SIM2BLENDER 3D MODEL PRE-BUILD CHECK & PREVIEW')
@@ -1507,6 +1540,10 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             mtl_status = 'Found' if mtl.is_file() else 'None (default shading)'
             self.log.appendPlainText(f"  • {m['name']}: {p.name} (MTL: {mtl_status}) at {m['position']}")
 
+        self.log.appendPlainText(f'Checked Scene Target: {checked_blend_path.name}')
+        self.log.appendPlainText('💡 TIP: In Blender, adjust model positions, rotations, colors, or materials,')
+        self.log.appendPlainText('   then press Ctrl+S (or click "💾 Save Checked Scene" in the N-panel).')
+        self.log.appendPlainText('   "Build Blender scene" will automatically build using your saved calibrations!')
         self.log.appendPlainText('Launching interactive Blender 3D Model Inspector…')
         self.log.appendPlainText('=' * 60)
 
@@ -1519,6 +1556,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             'obj_models': obj_models,
             'setup_ui': True,
             'setup_lighting': True,
+            'save_blend_path': str(checked_blend_path.resolve()),
         }
 
         import tempfile
@@ -1529,6 +1567,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             '--python', str(script_path),
             '--',
             '--config', str(cfg_path),
+            '--save-blend', str(checked_blend_path.resolve()),
         ]
 
         ok, _ = QProcess.startDetached(str(blender_path), args, str(PROJECT_ROOT))
@@ -1555,8 +1594,16 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
 
 
 def main():
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('AKVAgroup.Sim2Blender.App.1.0')
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
     app.setApplicationName('Sim2Blender')
+    if APP_ICON_PATH.is_file():
+        app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
     app.setStyle('Fusion')
     app.setPalette(light_palette())
     window = MainWindow()

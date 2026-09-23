@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import bpy
 import bmesh
@@ -86,12 +89,16 @@ class TestFeedingCamera(unittest.TestCase):
         self.assertEqual(scene.render.resolution_x, 1920)
         self.assertEqual(scene.render.resolution_y, 1080)
 
-        # Closed near/far clipped viewing volume, with translucent faces.
+        # Closed near/far clipped viewing volume, with translucent faces and render visibility.
         self.assertIsNotNone(frustum_obj)
         self.assertEqual(frustum_obj.name, "Feeding_Camera_Frustum")
+        self.assertFalse(frustum_obj.hide_render, "Frustum mesh must be visible in render")
         self.assertEqual(len(frustum_obj.data.vertices), 8)
         self.assertEqual(frustum_obj.display_type, "SOLID")
+        self.assertGreaterEqual(len(frustum_obj.data.materials), 2)
         self.assertLess(frustum_obj.data.materials[0].diffuse_color[3], 1.0)
+        self.assertIn("Frustum_Edges", [m.name for m in frustum_obj.modifiers])
+        self.assertEqual(frustum_obj.modifiers["Frustum_Edges"].type, "WIREFRAME")
         bm = bmesh.new()
         bm.from_mesh(frustum_obj.data)
         self.assertTrue(all(edge.is_manifold for edge in bm.edges))

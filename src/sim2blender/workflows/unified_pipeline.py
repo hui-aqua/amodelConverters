@@ -312,6 +312,33 @@ def build_unified_scene(config: dict) -> None:
 
     round_net(cage, membrane, ids)
 
+    # 2.5 Equipment & Calibrated 3D Models
+    equip_col = bpy.data.collections.get("Equipment")
+    if equip_col is None:
+        equip_col = bpy.data.collections.new("Equipment")
+        scene.collection.children.link(equip_col)
+
+    checked_blend = config.get("checked_blend_path")
+    if checked_blend and Path(checked_blend).is_file():
+        print(f"GUI_STAGE: Importing calibrated models from {Path(checked_blend).name}…", flush=True)
+        from sim2blender.blender.model_preview import import_checked_models_from_blend
+        imported_calibrated = import_checked_models_from_blend(checked_blend, equip_col)
+        print(f"Imported {len(imported_calibrated)} calibrated model(s): {[o.name for o in imported_calibrated]}", flush=True)
+
+    # Import any configured extra OBJ models not already present
+    obj_models_cfg = config.get("obj_models") or []
+    for obj_entry in obj_models_cfg:
+        obj_p = obj_entry.get("path")
+        if not obj_p or not Path(obj_p).is_file():
+            continue
+        obj_name = obj_entry.get("name", Path(obj_p).stem)
+        existing_obj = bpy.data.objects.get(obj_name)
+        if existing_obj is None and not any(o.name.startswith(f"{obj_name}_") for o in bpy.data.objects):
+            from sim2blender.blender.model_preview import load_preview_obj_model
+            pos = tuple(obj_entry.get("position", (0.0, 0.0, 0.0)))
+            rot = tuple(obj_entry.get("rotation", (0.0, 0.0, 0.0)))
+            load_preview_obj_model(obj_p, name=obj_name, position=pos, rotation=rot, collection=equip_col)
+
     # 3. Feed Spreader and Ballistic Feed Pellets
     if use_feed:
         print("GUI_STAGE: Building feed spreader and ballistic pellets…", flush=True)

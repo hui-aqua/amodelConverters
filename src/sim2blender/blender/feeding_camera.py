@@ -123,9 +123,11 @@ def build_frustum_pyramid_mesh(
     obj.show_transparent = True
     obj.show_wire = True
     obj.show_in_front = False
-    obj.hide_render = True
+    obj.hide_render = False
+    if hasattr(obj, "visible_shadow"):
+        obj.visible_shadow = False
 
-    # Assign semi-transparent viewport material
+    # 1. Volume face material (semi-transparent with subtle emission)
     mat = bpy.data.materials.get(f"{name}_Mat")
     if mat is None:
         mat = bpy.data.materials.new(f"{name}_Mat")
@@ -135,12 +137,60 @@ def build_frustum_pyramid_mesh(
     if bsdf:
         bsdf.inputs["Base Color"].default_value = (0.08, 0.85, 0.75, 1.0)
         bsdf.inputs["Alpha"].default_value = 0.18
-        bsdf.inputs["Roughness"].default_value = 0.6
+        bsdf.inputs["Roughness"].default_value = 0.4
+        if "Emission Color" in bsdf.inputs:
+            bsdf.inputs["Emission Color"].default_value = (0.08, 0.85, 0.75, 1.0)
+        elif "Emission" in bsdf.inputs:
+            bsdf.inputs["Emission"].default_value = (0.08, 0.85, 0.75, 1.0)
+        if "Emission Strength" in bsdf.inputs:
+            bsdf.inputs["Emission Strength"].default_value = 0.35
     if hasattr(mat, "surface_render_method"):
-        mat.surface_render_method = "DITHERED"
+        mat.surface_render_method = "BLENDED"
     elif hasattr(mat, "blend_method"):
         mat.blend_method = "BLEND"
-    obj.data.materials.append(mat)
+    if hasattr(mat, "shadow_method"):
+        mat.shadow_method = "NONE"
+
+    if not obj.data.materials:
+        obj.data.materials.append(mat)
+    else:
+        obj.data.materials[0] = mat
+
+    # 2. Wireframe strut edge material (crisp glowing outline in renders)
+    edge_mat = bpy.data.materials.get(f"{name}_Edge_Mat")
+    if edge_mat is None:
+        edge_mat = bpy.data.materials.new(f"{name}_Edge_Mat")
+    edge_mat.diffuse_color = (0.1, 0.95, 0.85, 0.95)
+    edge_mat.use_nodes = True
+    edge_bsdf = edge_mat.node_tree.nodes.get("Principled BSDF")
+    if edge_bsdf:
+        edge_bsdf.inputs["Base Color"].default_value = (0.1, 0.95, 0.85, 1.0)
+        edge_bsdf.inputs["Alpha"].default_value = 0.95
+        if "Emission Color" in edge_bsdf.inputs:
+            edge_bsdf.inputs["Emission Color"].default_value = (0.1, 0.95, 0.85, 1.0)
+        elif "Emission" in edge_bsdf.inputs:
+            edge_bsdf.inputs["Emission"].default_value = (0.1, 0.95, 0.85, 1.0)
+        if "Emission Strength" in edge_bsdf.inputs:
+            edge_bsdf.inputs["Emission Strength"].default_value = 2.0
+    if hasattr(edge_mat, "surface_render_method"):
+        edge_mat.surface_render_method = "BLENDED"
+    elif hasattr(edge_mat, "blend_method"):
+        edge_mat.blend_method = "BLEND"
+    if hasattr(edge_mat, "shadow_method"):
+        edge_mat.shadow_method = "NONE"
+
+    if len(obj.data.materials) < 2:
+        obj.data.materials.append(edge_mat)
+    else:
+        obj.data.materials[1] = edge_mat
+
+    # Add Wireframe modifier so bounding edges render as 3D struts without replacing volume faces
+    wire = obj.modifiers.get("Frustum_Edges")
+    if wire is None:
+        wire = obj.modifiers.new("Frustum_Edges", "WIREFRAME")
+    wire.thickness = max(0.005, float(visual_distance_m) * 0.003)
+    wire.use_replace = False
+    wire.material_offset = 1
 
     return obj
 

@@ -185,6 +185,8 @@ class PipelineJob:
     fish_feeding: dict | None = None
     cinematic_camera: dict | None = None
     feeding_camera: dict | None = None
+    checked_blend_path: str | Path | None = None
+    obj_models: list[dict] | None = None
 
     def command(self):
         if hasattr(ModelJob.command, 'return_value') or hasattr(ModelJob.command, 'side_effect'):
@@ -224,6 +226,8 @@ class PipelineJob:
             'fish_feeding': self.fish_feeding,
             'cinematic_camera': self.cinematic_camera,
             'feeding_camera': self.feeding_camera,
+            'checked_blend_path': str(Path(self.checked_blend_path).resolve()) if self.checked_blend_path else None,
+            'obj_models': self.obj_models,
         }
 
         self.output.parent.mkdir(parents=True, exist_ok=True)

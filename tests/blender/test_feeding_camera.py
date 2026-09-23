@@ -19,6 +19,7 @@ from sim2blender.blender.feeding_camera import (
     setup_feeding_camera,
     count_pellets_in_frustum,
     build_frustum_pyramid_mesh,
+    insert_feeding_camera_body,
     DEFAULT_FEEDING_CAMERA_CONFIG,
 )
 from sim2blender.workflows.unified_pipeline import build_unified_scene
@@ -259,8 +260,61 @@ class TestFeedingCamera(unittest.TestCase):
         self.assertIsNone(scene.objects.get("Feeding_Camera"))
         self.assertIsNone(scene.objects.get("Feeding_Camera_Frustum"))
         self.assertIsNone(scene.objects.get("Feeding_Camera_HUD"))
+        self.assertIsNone(scene.objects.get("Feeding_Camera_Body"))
         report_path = output_blend.with_suffix(".feeding_camera.json")
         self.assertFalse(report_path.exists())
+
+    def test_insert_feeding_camera_body_defaults(self):
+        """Verify feeding camera body imports camera.obj, scales by 0.001, and parents to camera."""
+        scene = bpy.context.scene
+        cam_data = bpy.data.cameras.new("TestCamData")
+        cam_obj = bpy.data.objects.new("TestCam", cam_data)
+        cam_obj.location = Vector((2.5, 0.0, -5.0))
+        scene.collection.objects.link(cam_obj)
+
+        body = insert_feeding_camera_body(camera_obj=cam_obj)
+        self.assertIsNotNone(body)
+        self.assertEqual(body.name, "Feeding_Camera_Body")
+        self.assertEqual(body.parent, cam_obj)
+        self.assertAlmostEqual(body.scale.x, 0.001, places=5)
+        self.assertAlmostEqual(body.scale.y, 0.001, places=5)
+        self.assertAlmostEqual(body.scale.z, 0.001, places=5)
+        self.assertAlmostEqual(body.location.z, 0.34744, places=4)
+        self.assertTrue(body.get("is_camera_body", False))
+        self.assertIn("Feeding_Camera_Housing_Mat", [m.name for m in body.data.materials])
+
+    def test_feeding_camera_body_toggle_in_setup(self):
+        """Verify show_camera_body=False disables camera body insertion."""
+        scene = bpy.context.scene
+        config = {
+            "position": (2.5, 0.0, -5.0),
+            "target": (0.0, 0.0, -5.0),
+            "show_camera_body": False,
+        }
+        cam_obj, _, _ = setup_feeding_camera(config, scene)
+        self.assertIsNotNone(cam_obj)
+        self.assertIsNone(bpy.data.objects.get("Feeding_Camera_Body"))
+
+    def test_pipeline_creates_camera_body_object(self):
+        """Verify full build_unified_scene creates Feeding_Camera_Body."""
+        output_blend = self.folder / "scene_with_body.blend"
+        config = {
+            "model": str(self.model_path),
+            "output": str(output_blend),
+            "membrane_ids": [1],
+            "frames": 5,
+            "feeding_camera": {
+                "enabled": True,
+                "position": [2.5, 0.0, -5.0],
+                "target": [0.0, 0.0, -5.0],
+                "show_camera_body": True,
+            },
+        }
+        build_unified_scene(config)
+        scene = bpy.context.scene
+        body = scene.objects.get("Feeding_Camera_Body")
+        self.assertIsNotNone(body)
+        self.assertEqual(body.parent, scene.objects.get("Feeding_Camera"))
 
 
 if __name__ == "__main__":

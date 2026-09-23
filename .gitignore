@@ -18,6 +18,7 @@
 
 # Large local spreader models (>100 MB)
 /assets/spreaders/wb/WB_spreader_still.obj
+/assets/spreaders/starFish/
 
 # Python packaging and local environments.
 build/

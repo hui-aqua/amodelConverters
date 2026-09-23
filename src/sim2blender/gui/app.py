@@ -1251,6 +1251,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'render_height': 1080,
                     'show_frustum': self.feedcam_show_frustum.isChecked(),
                     'show_counter': self.feedcam_show_counter.isChecked(),
+                    'show_camera_body': self.feedcam_show_body.isChecked() if hasattr(self, 'feedcam_show_body') else True,
+                    'camera_body_obj_path': self.feedcam_model_edit.text().strip() if hasattr(self, 'feedcam_model_edit') and self.feedcam_model_edit.text().strip() else None,
                 }
 
             out_path = Path(self.output.text().strip())
@@ -1456,8 +1458,14 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             (hasattr(self, 'spreader_move_edit') and self.spreader_move_edit.text().strip() and Path(self.spreader_move_edit.text().strip()).is_file()) or
             (hasattr(self, 'spreader_still_edit') and self.spreader_still_edit.text().strip() and Path(self.spreader_still_edit.text().strip()).is_file())
         )
+        has_feedcam = bool(
+            hasattr(self, 'opt_feeding_camera') and self.opt_feeding_camera.isChecked() and
+            hasattr(self, 'feedcam_show_body') and self.feedcam_show_body.isChecked() and
+            hasattr(self, 'feedcam_model_edit') and self.feedcam_model_edit.text().strip() and
+            Path(self.feedcam_model_edit.text().strip()).is_file()
+        )
         has_extra = bool(hasattr(self, 'get_extra_obj_models') and self.get_extra_obj_models())
-        ready = bool(has_model or has_spreader or has_extra)
+        ready = bool(has_model or has_spreader or has_feedcam or has_extra)
         if hasattr(self, 'check_models_button'):
             self.check_models_button.setEnabled(ready and not self.running)
 
@@ -1507,7 +1515,27 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                 'rotation': [0.0, 0.0, 0.0],
             })
 
-        # 3. Additional custom OBJ models
+        # 3. Feeding camera 3D body model
+        if (hasattr(self, 'opt_feeding_camera') and self.opt_feeding_camera.isChecked() and
+            hasattr(self, 'feedcam_show_body') and self.feedcam_show_body.isChecked()):
+            cam_model = self.feedcam_model_edit.text().strip() if hasattr(self, 'feedcam_model_edit') else ''
+            if not cam_model:
+                cam_model = str(PROJECT_ROOT / 'assets' / 'camera' / 'camera.obj')
+            if cam_model and Path(cam_model).is_file():
+                cam_pos = [
+                    float(self.feedcam_pos_x.value()) if hasattr(self, 'feedcam_pos_x') else 2.5,
+                    float(self.feedcam_pos_y.value()) if hasattr(self, 'feedcam_pos_y') else 0.0,
+                    float(self.feedcam_pos_z.value()) if hasattr(self, 'feedcam_pos_z') else -5.0,
+                ]
+                obj_models.append({
+                    'path': str(Path(cam_model).resolve()),
+                    'name': 'Feeding_Camera_Body',
+                    'position': cam_pos,
+                    'rotation': [0.0, 0.0, 0.0],
+                    'scale': 0.001,
+                })
+
+        # 4. Additional custom OBJ models
         if hasattr(self, 'get_extra_obj_models'):
             obj_models.extend(self.get_extra_obj_models())
 

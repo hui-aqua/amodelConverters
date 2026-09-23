@@ -38,3 +38,5 @@ studio(bpy.context.scene)  # Requires the imported scene's Membrane cage
 
 The studio now uses 25% of the previous key/fill power and 20% of the previous rim power, exposure 0 instead of +1, and World strength 0.2 instead of 0.45. Light sizes stay broad, the fill is slightly cool, and the World remains dark blue. HDPE remains black with its existing material settings. These are absolute settings, so repeated runs do not keep dimming the lights.
 
+The three studio lights (`Key softbox`, `Warm fill`, `Rim`) are kept off by default (`hide_viewport = True`, `hide_render = True`) so they do not wash out ocean sunlight and water environments. They can be enabled in the Blender Outliner restriction toggles (viewport monitor/eye and render camera) or programmatically via `studio(scene, lights_off=False)`.
+

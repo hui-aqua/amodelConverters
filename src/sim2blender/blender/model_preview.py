@@ -243,6 +243,7 @@ def load_preview_obj_model(
     name: str = "OBJ_Model",
     position: tuple[float, float, float] = (0.0, 0.0, 0.0),
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    scale: float | tuple[float, float, float] = 1.0,
     collection: bpy.types.Collection | None = None,
 ) -> list[bpy.types.Object]:
     """Import an OBJ file, positioning it and ensuring valid materials and color shading."""
@@ -263,6 +264,10 @@ def load_preview_obj_model(
 
         obj.location = Vector(position)
         obj.rotation_euler = Vector(rotation)
+        if isinstance(scale, (int, float)):
+            obj.scale = (scale, scale, scale)
+        elif isinstance(scale, (list, tuple)) and len(scale) == 3:
+            obj.scale = tuple(scale)
 
         obj["is_preview_obj"] = True
         obj["source_path"] = str(path)
@@ -275,8 +280,16 @@ def load_preview_obj_model(
             if default_mat.node_tree:
                 for node in default_mat.node_tree.nodes:
                     if node.type == "BSDF_PRINCIPLED":
-                        # Distinctive clean warm gray / industrial orange tone
-                        node.inputs["Base Color"].default_value = (0.85, 0.55, 0.15, 1.0)
+                        if "camera" in name.lower():
+                            # Dark anodized subsea titanium finish
+                            node.inputs["Base Color"].default_value = (0.12, 0.14, 0.16, 1.0)
+                            if "Metallic" in node.inputs:
+                                node.inputs["Metallic"].default_value = 0.75
+                            if "Roughness" in node.inputs:
+                                node.inputs["Roughness"].default_value = 0.35
+                        else:
+                            # Distinctive clean warm gray / industrial orange tone
+                            node.inputs["Base Color"].default_value = (0.85, 0.55, 0.15, 1.0)
             obj.data.materials.append(default_mat)
 
         placed_objects.append(obj)
@@ -584,11 +597,13 @@ def build_model_preview_scene(config: dict[str, Any]) -> dict[str, Any]:
         name = obj_cfg.get("name", Path(path).stem)
         pos = tuple(obj_cfg.get("position", (0.0, 0.0, 0.0)))
         rot = tuple(obj_cfg.get("rotation", (0.0, 0.0, 0.0)))
+        scale = obj_cfg.get("scale", 1.0)
         imported = load_preview_obj_model(
             obj_path=path,
             name=name,
             position=pos,
             rotation=rot,
+            scale=scale,
             collection=col,
         )
         created_obj_models.extend(imported)

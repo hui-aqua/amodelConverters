@@ -50,6 +50,10 @@ def run_workflows_test():
         fish = [o for o in scene.objects if o.name.startswith('Fish_')]
         assert len(fish) == 3 and all(o['fish_asset_custom'] for o in fish)
         assert all(o.data is fish[0].data for o in fish)
+        for name in ('Key softbox', 'Warm fill', 'Rim'):
+            light_obj = scene.objects[name]
+            assert light_obj.hide_viewport
+            assert light_obj.hide_render
         for frame in range(1,9):
             scene.frame_set(frame)
             evaluated = cage.evaluated_get(bpy.context.evaluated_depsgraph_get())

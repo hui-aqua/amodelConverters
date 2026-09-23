@@ -54,6 +54,23 @@ class RopeShadingTests(unittest.TestCase):
         self.assertAlmostEqual(bpy.context.scene.world.node_tree.nodes['Background'].inputs['Strength'].default_value,.2)
         studio(bpy.context.scene)
         self.assertEqual(bpy.context.scene.objects['Key softbox'].data.energy,45000)
+        for name in ('Key softbox', 'Warm fill', 'Rim'):
+            light_obj = bpy.context.scene.objects[name]
+            self.assertTrue(light_obj.hide_viewport)
+            self.assertTrue(light_obj.hide_render)
+            self.assertTrue(light_obj.hide_get())
+        studio(bpy.context.scene, lights_off=False)
+        for name in ('Key softbox', 'Warm fill', 'Rim'):
+            light_obj = bpy.context.scene.objects[name]
+            self.assertFalse(light_obj.hide_viewport)
+            self.assertFalse(light_obj.hide_render)
+            self.assertFalse(light_obj.hide_get())
+        studio(bpy.context.scene)
+        for name in ('Key softbox', 'Warm fill', 'Rim'):
+            light_obj = bpy.context.scene.objects[name]
+            self.assertTrue(light_obj.hide_viewport)
+            self.assertTrue(light_obj.hide_render)
+            self.assertTrue(light_obj.hide_get())
 
 result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(RopeShadingTests))
 if not result.wasSuccessful():raise RuntimeError('Rope shading tests failed')

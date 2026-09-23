@@ -58,16 +58,19 @@ class TestModelPreviewGui(unittest.TestCase):
         self.window.update_check_models_button_state()
         self.assertTrue(self.window.check_models_button.isEnabled())
 
-    def test_extra_obj_models_list_and_retrieval(self):
-        """Verify extra OBJ models can be added and retrieved."""
-        dummy_obj = self.folder / "sensor_buoy.obj"
-        dummy_obj.write_text("v 0 0 0\n", encoding="utf-8")
+    def test_feeding_camera_body_gui_controls(self):
+        """Verify feeding camera body housing GUI controls and extra OBJ removal."""
+        self.assertTrue(hasattr(self.window, "feedcam_show_body"))
+        self.assertTrue(self.window.feedcam_show_body.isChecked())
+        self.assertTrue(hasattr(self.window, "feedcam_model_edit"))
+        self.assertIn("camera.obj", self.window.feedcam_model_edit.text())
+        self.assertEqual(self.window.get_extra_obj_models(), [])
 
-        self.window.extra_obj_list.addItem(str(dummy_obj))
-        extra_models = self.window.get_extra_obj_models()
-        self.assertEqual(len(extra_models), 1)
-        self.assertEqual(extra_models[0]["name"], "sensor_buoy")
-        self.assertEqual(extra_models[0]["path"], str(dummy_obj.resolve()))
+        # Toggling feedcam_show_body updates model line edit
+        self.window.feedcam_show_body.setChecked(False)
+        self.assertFalse(self.window.feedcam_model_edit.isEnabled())
+        self.window.feedcam_show_body.setChecked(True)
+        self.assertTrue(self.window.feedcam_model_edit.isEnabled())
 
     @patch("PySide6.QtCore.QProcess.startDetached")
     def test_check_models_preview_launches_detached_blender(self, mock_start):
@@ -101,11 +104,11 @@ class TestModelPreviewGui(unittest.TestCase):
         self.assertFalse(self.window.windowIcon().isNull())
         self.assertFalse(APP.windowIcon().isNull())
 
-    @patch("PySide6.QtCore.QProcess.start")
-    def test_start_build_incorporates_checked_blend(self, mock_start):
+    def test_start_build_incorporates_checked_blend(self):
         """Verify start_build detects .checked.blend and passes it to PipelineJob."""
         model_path = Path(__file__).resolve().parents[2] / "examples" / "models" / "winch_cage.amodel"
         self.window.model.setText(str(model_path))
+        until(lambda: self.window.info is not None)
         until(lambda: not self.window.workers)
 
         out_blend = self.folder / "scene_output.blend"
@@ -113,7 +116,12 @@ class TestModelPreviewGui(unittest.TestCase):
         checked_blend.write_text("dummy blend content", encoding="utf-8")
         self.window.output.setText(str(out_blend))
 
+        self.window.process.start = MagicMock()
         self.window.start_build()
+        self.window.running = False
+        if self.window.log_file:
+            self.window.log_file.close()
+            self.window.log_file = None
         self.assertIsNotNone(self.window.job)
         self.assertEqual(Path(self.window.job.checked_blend_path).resolve(), checked_blend.resolve())
         self.assertIn("Incorporating calibrated models & materials", self.window.log.toPlainText())

@@ -153,16 +153,24 @@ def setup_screen_rendering(
             scene.eevee.use_volumetric_shadows = True
 
     # Configure 3D viewport screen shading for authentic material & light display
-    for area in bpy.context.screen.areas if bpy.context.screen else []:
-        if area.type == "VIEW_3D":
-            for space in area.spaces:
-                if space.type == "VIEW_3D":
-                    space.shading.type = "MATERIAL"
-                    space.shading.use_scene_lights = True
-                    space.shading.use_scene_world = True
+    screens = [bpy.context.screen] if getattr(bpy.context, "screen", None) else list(getattr(bpy.data, "screens", []))
+    for screen in screens:
+        if not screen:
+            continue
+        for area in screen.areas:
+            if area.type == "VIEW_3D":
+                for space in area.spaces:
+                    if space.type == "VIEW_3D":
+                        space.shading.type = "MATERIAL"
+                        space.shading.use_scene_lights = True
+                        space.shading.use_scene_world = True
+            elif area.type == "OUTLINER":
+                for space in area.spaces:
+                    if space.type == "OUTLINER":
+                        space.show_restrict_column_viewport = True
 
 
-def studio(scene, cage=None):
+def studio(scene, cage=None, lights_off=True):
     """Set up lighting and screen rendering, adapting between ocean daylight and studio inspection."""
     import bpy
     from mathutils import Vector
@@ -199,6 +207,20 @@ def studio(scene, cage=None):
         obj.data.shape = "DISK"
         obj.data.size = size * scale
         obj.data.color = color
+        if lights_off:
+            obj.hide_viewport = True
+            obj.hide_render = True
+            try:
+                obj.hide_set(True)
+            except Exception:
+                pass
+        else:
+            obj.hide_viewport = False
+            obj.hide_render = False
+            try:
+                obj.hide_set(False)
+            except Exception:
+                pass
 
     # When ocean water is present, physical daylight (Ocean Sun + Ocean Sky) is active.
     if scene.get("has_water"):

@@ -12,7 +12,7 @@ from sim2blender.blender.shading import studio
 scene = bpy.context.scene
 cage = scene.objects['Membrane cage']
 scene.frame_set(1)
-studio(scene)
+studio(scene, lights_off=False)
 out = PROJECT_ROOT / 'docs/assets'
 out.mkdir(parents=True, exist_ok=True)
 scene.render.filepath = str(out / 'cage-overview.png')

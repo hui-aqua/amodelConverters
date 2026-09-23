@@ -16,6 +16,8 @@ import bpy
 from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Matrix, Vector
 
+from sim2blender.core.paths import PROJECT_ROOT
+
 DEFAULT_FEEDING_CAMERA_CONFIG = {
     "enabled": True,
     "position_x": 2.5,
@@ -31,6 +33,8 @@ DEFAULT_FEEDING_CAMERA_CONFIG = {
     "sensor_height_mm": 20.25,  # 16:9 FHD aspect ratio (36.0 x 20.25)
     "show_frustum_pyramid": True,
     "show_hud_counter": True,
+    "show_camera_body": True,
+    "camera_body_obj_path": str(PROJECT_ROOT / "assets" / "camera" / "camera.obj"),
 }
 
 
@@ -195,6 +199,89 @@ def build_frustum_pyramid_mesh(
     return obj
 
 
+def insert_feeding_camera_body(
+    camera_obj: bpy.types.Object,
+    model_path: str | Path | None = None,
+    collection: bpy.types.Collection | None = None,
+    scale: float = 0.001,
+    offset_z: float = 0.34744,
+    name: str = "Feeding_Camera_Body",
+) -> bpy.types.Object | None:
+    """Import and attach the physical subsea camera 3D model (camera.obj) to the camera rig.
+
+    The model is scaled from FreeCAD millimeters to Blender meters (0.001), aligned with
+    the camera optical axis looking down -Z, with the front optical dome located at the
+    camera origin (where the frustum pyramid begins) and the cylindrical body extending
+    backward along +Z so it never obstructs the optical detection volume.
+    """
+    from sim2blender.blender.feed import import_obj_file
+
+    target_path = None
+    if model_path:
+        p = Path(model_path)
+        if p.is_file():
+            target_path = p.resolve()
+        elif (PROJECT_ROOT / p).is_file():
+            target_path = (PROJECT_ROOT / p).resolve()
+
+    if target_path is None:
+        default_path = PROJECT_ROOT / "assets" / "camera" / "camera.obj"
+        if default_path.is_file():
+            target_path = default_path.resolve()
+
+    if target_path is None or not target_path.is_file():
+        return None
+
+    existing = bpy.data.objects.get(name)
+    if existing is not None:
+        bpy.data.objects.remove(existing, do_unlink=True)
+
+    imported = import_obj_file(target_path)
+    if not imported:
+        return None
+
+    body = imported[0]
+    body.name = name
+
+    target_col = collection or bpy.context.scene.collection
+    if body.name not in target_col.objects:
+        target_col.objects.link(body)
+
+    # Parent to camera_obj. Since camera looks down -Z, offset_z = +0.34744 m
+    # places the front optical dome at Z = 0 (camera origin) and extends the housing
+    # backward along +Z, safely behind the frustum pyramid.
+    body.parent = camera_obj
+    body.scale = (scale, scale, scale)
+    body.location = (0.0, 0.0, offset_z)
+    body.rotation_euler = (0.0, 0.0, 0.0)
+
+    # Ensure professional marine subsea anodized housing material
+    mat_name = "Feeding_Camera_Housing_Mat"
+    mat = bpy.data.materials.get(mat_name)
+    if mat is None:
+        mat = bpy.data.materials.new(mat_name)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        if bsdf:
+            # Dark anodized subsea titanium / slate finish
+            bsdf.inputs["Base Color"].default_value = (0.12, 0.14, 0.16, 1.0)
+            if "Metallic" in bsdf.inputs:
+                bsdf.inputs["Metallic"].default_value = 0.75
+            if "Roughness" in bsdf.inputs:
+                bsdf.inputs["Roughness"].default_value = 0.35
+
+    if not body.data.materials:
+        body.data.materials.append(mat)
+    else:
+        body.data.materials[0] = mat
+
+    body["is_camera_body"] = True
+    body["source_file"] = str(target_path)
+    camera_obj["camera_body"] = body.name
+
+    return body
+
+
 def setup_feeding_camera(
     config: dict | None = None,
     scene: bpy.types.Scene | None = None,
@@ -312,6 +399,17 @@ def setup_feeding_camera(
         hud_obj.parent = cam_obj
         hud_obj.location = Vector((-0.6, 0.35, -0.4))
         hud_obj.rotation_euler = (0.0, 0.0, 0.0)
+
+    # 4. Physical Camera Housing 3D Model Body (camera.obj)
+    show_body = bool(cfg.get("show_camera_body", cfg.get("show_body", True)))
+    cam_model_path = cfg.get("camera_body_obj_path", cfg.get("camera_model_path", None))
+    body_obj = None
+    if show_body:
+        body_obj = insert_feeding_camera_body(
+            camera_obj=cam_obj,
+            model_path=cam_model_path,
+            collection=feed_cam_col,
+        )
 
     return cam_obj, frustum_obj, hud_obj
 

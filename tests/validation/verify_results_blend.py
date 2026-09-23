@@ -54,6 +54,7 @@ if fish:
     assert cage.hide_render
     assert scene.render.engine == 'CYCLES'
     assert all(scene.objects.get(n) for n in ('Key softbox', 'Warm fill', 'Rim'))
+    assert all(scene.objects[n].hide_viewport and scene.objects[n].hide_render for n in ('Key softbox', 'Warm fill', 'Rim'))
     for obj in objects:
         if not obj.name.startswith('membrane_'):
             continue

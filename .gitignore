@@ -1,5 +1,7 @@
 # Generated Blender scenes, renders, simulation caches and validation logs.
-/output/
+/output/*
+!/output/.gitkeep
+!/output/README.md
 
 # Personal AquaSim input files; keep the folder structure and instructions.
 /inputs/models/*
@@ -12,7 +14,6 @@
 
 # Local cases and their case-specific export helper (not bundled examples).
 /examples/models/944ENR.amodel
-/examples/models/ferdigModell.amodel
 /examples/models/SLS_01.avz
 /examples/models/extractNotd.bat
 

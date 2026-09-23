@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 import bpy
-from sim2blender.amodel import read_model
+from sim2blender.io.aquasim.model import read_model
 from sim2blender.blender.build import boundary_caps, Enclosure
 
 scene = bpy.context.scene

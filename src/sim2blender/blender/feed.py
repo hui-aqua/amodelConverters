@@ -477,6 +477,7 @@ def run_feed_animation(config: dict | None = None) -> None:
                     break
 
         # Capture base positions (user-calibrated from checked blend or default imported)
+        bpy.context.view_layer.update()
         rotor_base_loc = spreader_move.matrix_world.translation.copy()
         still_base_loc = (
             still_obj.matrix_world.translation.copy()

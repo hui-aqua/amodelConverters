@@ -7,8 +7,9 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 import bpy
-from sim2blender.amodel import read_model
-from sim2blender.results import read_results, map_nodes, sample_frames
+from sim2blender.io.aquasim.model import read_model
+from sim2blender.io.aquasim.results import read_results, map_nodes
+from sim2blender.core.timeline import sample_frames
 from sim2blender.blender.build import Enclosure
 
 scene = bpy.context.scene

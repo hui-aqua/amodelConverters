@@ -1,6 +1,6 @@
 # Blender 5.2.0 LTS
 # www.blender.org
-mtllib camera_optimized.mtl
+# mtllib camera.mtl
 o camera
 v -1.612173 51.018730 65.133263
 v 1.628513 51.204464 64.831398

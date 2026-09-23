@@ -36,7 +36,8 @@ def snapshot(obj):
 class BeamShadingTests(unittest.TestCase):
     def test_imported_model_and_thousand_segments(self):
         import time
-        from sim2blender.amodel import read_model, PROJECT_ROOT
+        from sim2blender.io.aquasim.model import read_model
+        from sim2blender.core.paths import PROJECT_ROOT
         from sim2blender.blender.geometry import build_members
         collection=bpy.data.collections.new('Imported beam test')
         bpy.context.scene.collection.children.link(collection)

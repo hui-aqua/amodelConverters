@@ -4,13 +4,12 @@ This directory contains standalone execution scripts, modular animation wrappers
 
 ```
 scripts/
-├── blender/         # Direct Blender scripting workspace & headless automation scripts
+├── blender/         # Direct Blender scripting workspace & headless automation scripts (9 modular tools)
 ├── maintenance/     # Developer utilities (preview rendering, scene refresh, project stats)
-├── legacy/          # Backward-compatibility workflow shims
-├── gui.py           # GUI launcher entry point (calls launchers/gui/app.py)
-├── launch_gui.ps1   # PowerShell GUI launch script
 └── run_workflow.py  # CLI unified workflow runner (calls launchers/cli/run_workflow.py)
 ```
+
+> **Note on GUI Launcher**: To launch the GUI application, run `launchers/gui/start.ps1` or `python launchers/gui/app.py` (or double-click `Start Sim2Blender.cmd` in the repository root).
 
 ---
 
@@ -22,10 +21,13 @@ All optional animation and physics modules are implemented with their core logic
 |---|---|---|
 | [`blender_aquasim_replay.py`](blender/blender_aquasim_replay.py) | `sim2blender.blender.replay` | Replaces cloth simulation with AquaSim results displacements (`out.txt`) using shape keys |
 | [`blender_fish_schooling.py`](blender/blender_fish_schooling.py) | `sim2blender.blender.fish.school` | Simulates boid salmon schooling contained within the 3D cage geometry |
+| [`blender_fish_tail_preview.py`](blender/blender_fish_tail_preview.py) | `sim2blender.blender.fish.tail` | Generates a standalone preview and animation testing the fish tail oscillating rig |
 | [`blender_feed_animation.py`](blender/blender_feed_animation.py) | `sim2blender.blender.feed` | Imports spreader models (`spreader_move.obj`), animates rotor, and calculates air/water pellet trajectories |
 | [`blender_spreader_waterline.py`](blender/blender_spreader_waterline.py) | `sim2blender.blender.spreader_waterline` | Interactive 3D visualization and calibration of the feed spreader water line lift and waterline intersection |
 | [`blender_fish_feeding_animation.py`](blender/blender_fish_feeding_animation.py) | `sim2blender.blender.fish.feeding` | Simulates fish feeding behavior coupled with sinking feed pellets |
+| [`blender_feeding_camera.py`](blender/blender_feeding_camera.py) | `sim2blender.blender.feeding_camera` | Sets up automated camera tracking for feeding operations |
 | [`blender_cinematic_camera.py`](blender/blender_cinematic_camera.py) | `sim2blender.blender.camera` | Generates a 3-phase automated camera movement (aerial overview $\rightarrow$ spreader swoop $\rightarrow$ underwater dive) with autofocus DOF |
+| [`blender_model_preview.py`](blender/blender_model_preview.py) | `sim2blender.blender.preview` | Quickly visualizes `.amodel` meshes and geometry directly in Blender |
 
 ### Example Command-Line Usage
 

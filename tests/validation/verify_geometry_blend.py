@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 import bpy
 from mathutils import Vector
-from sim2blender.amodel import read_model
+from sim2blender.io.aquasim.model import read_model
 from sim2blender.blender.geometry import local_frame
 scene=bpy.context.scene
 model=read_model(scene.objects['Membrane cage']['source_file'])

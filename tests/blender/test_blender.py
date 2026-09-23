@@ -56,7 +56,8 @@ class BlenderTests(unittest.TestCase):
         self.assertEqual(stitch_membrane_seams(faces, points), faces)
 
     def test_riktig_membrane_seam(self):
-        from sim2blender.amodel import read_model, PROJECT_ROOT
+        from sim2blender.io.aquasim.model import read_model
+        from sim2blender.core.paths import PROJECT_ROOT
         model = read_model(PROJECT_ROOT/'examples/models/riktig_amodel_ULS.amodel')
         cells = [c for c in model.cells if c['component_tag'] == 'membrane']
         ids = sorted({n for c in cells for n in c['nodes']})
@@ -98,7 +99,7 @@ class BlenderTests(unittest.TestCase):
             bpy.context.scene.frame_set(frame)
             mesh = obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
             volume = Enclosure([v.co for v in mesh.vertices],self.faces)
-            self.assertTrue(all(volume.contains(f.location,.12) for f in fish))
+            self.assertTrue(all(volume.contains(f.location,.10) for f in fish))
         self.assertNotEqual(tuple(fish[0].location), (0,0,0))
 
     def test_school_follows_translating_enclosure(self):

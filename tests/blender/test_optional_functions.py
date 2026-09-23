@@ -10,10 +10,12 @@ Feed Spreader, Fish Feeding, Cinematic Camera) are unselected/disabled:
 
 from __future__ import annotations
 
-import json
+import sys
 from pathlib import Path
 import tempfile
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import bpy
 

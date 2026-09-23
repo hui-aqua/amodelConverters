@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 import bpy
 from mathutils import Vector
-from sim2blender.amodel import read_model
+from sim2blender.io.aquasim.model import read_model
 scene=bpy.context.scene;cage=scene.objects['Membrane cage']
 model=read_model(cage['source_file'])
 ropes=[o for o in scene.objects if o.get('component_type')=='truss']

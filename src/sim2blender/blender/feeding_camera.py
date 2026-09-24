@@ -74,6 +74,8 @@ def build_frustum_pyramid_mesh(
 ) -> bpy.types.Object:
     """Build a pyramid frustum mesh representing the camera's visual detection volume."""
     existing = bpy.data.objects.get(name)
+    if existing is not None and (existing.get("is_calibrated") or existing.get("is_preview_obj")):
+        return existing
     if existing is not None:
         bpy.data.objects.remove(existing, do_unlink=True)
 
@@ -233,6 +235,16 @@ def insert_feeding_camera_body(
         return None
 
     existing = bpy.data.objects.get(name)
+    if existing is not None and (existing.get("is_calibrated") or existing.get("is_preview_obj")):
+        target_col = collection or bpy.context.scene.collection
+        if existing.name not in target_col.objects:
+            target_col.objects.link(existing)
+        if existing.parent != camera_obj:
+            existing.parent = camera_obj
+            existing.matrix_parent_inverse = camera_obj.matrix_world.inverted()
+        camera_obj["camera_body"] = existing.name
+        return existing
+
     if existing is not None:
         bpy.data.objects.remove(existing, do_unlink=True)
 
@@ -349,15 +361,27 @@ def setup_feeding_camera(
     cam_data.show_limits = True
 
     cam_obj = bpy.data.objects.get("Feeding_Camera")
+    is_calibrated_cam = bool(cam_obj is not None and (cam_obj.get("is_calibrated") or cam_obj.get("is_preview_obj")))
+
+    # Check if a calibrated Feeding_Camera_Body exists without camera object (e.g. from legacy checked blends)
+    existing_body = bpy.data.objects.get("Feeding_Camera_Body")
+    if not is_calibrated_cam and existing_body is not None and (existing_body.get("is_calibrated") or existing_body.get("is_preview_obj")):
+        bpy.context.view_layer.update()
+        calibrated_body_pos = existing_body.matrix_world.translation.copy()
+        pos = Vector(calibrated_body_pos)
+
     if cam_obj is None:
         cam_obj = bpy.data.objects.new("Feeding_Camera", cam_data)
         feed_cam_col.objects.link(cam_obj)
     else:
         cam_obj.data = cam_data
+        if cam_obj.name not in feed_cam_col.objects:
+            feed_cam_col.objects.link(cam_obj)
 
-    # Set position and orientation looking at target
-    mat_world = build_camera_lookat_matrix(pos, target)
-    cam_obj.matrix_world = mat_world
+    if not is_calibrated_cam:
+        # Set position and orientation looking at target for new/uncalibrated camera
+        mat_world = build_camera_lookat_matrix(pos, target)
+        cam_obj.matrix_world = mat_world
 
     cam_obj["camera_role"] = "feeding_inspection"
     cam_obj["visual_distance_m"] = visual_distance
@@ -379,8 +403,9 @@ def setup_feeding_camera(
         )
         if frustum_obj.name not in feed_cam_col.objects:
             feed_cam_col.objects.link(frustum_obj)
-        frustum_obj.parent = cam_obj
-        frustum_obj.matrix_local = Matrix.Identity(4)
+        if frustum_obj.parent != cam_obj:
+            frustum_obj.parent = cam_obj
+            frustum_obj.matrix_local = Matrix.Identity(4)
 
     # 3. HUD Counter Text
     hud_obj = None
@@ -391,14 +416,17 @@ def setup_feeding_camera(
             curve_data = bpy.data.curves.new(name=hud_name, type="FONT")
             hud_obj = bpy.data.objects.new(hud_name, curve_data)
             feed_cam_col.objects.link(hud_obj)
+        elif hud_obj.name not in feed_cam_col.objects:
+            feed_cam_col.objects.link(hud_obj)
 
         hud_obj.data.body = f"Feeding Camera: Pellets: 0 (Range: {visual_distance}m)"
         hud_obj.data.size = 0.12
         hud_obj.show_in_front = True
         hud_obj.hide_render = True
-        hud_obj.parent = cam_obj
-        hud_obj.location = Vector((-0.6, 0.35, -0.4))
-        hud_obj.rotation_euler = (0.0, 0.0, 0.0)
+        if hud_obj.parent != cam_obj:
+            hud_obj.parent = cam_obj
+            hud_obj.location = Vector((-0.6, 0.35, -0.4))
+            hud_obj.rotation_euler = (0.0, 0.0, 0.0)
 
     # 4. Physical Camera Housing 3D Model Body (camera.obj)
     show_body = bool(cfg.get("show_camera_body", cfg.get("show_body", True)))

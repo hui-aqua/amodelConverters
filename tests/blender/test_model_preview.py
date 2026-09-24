@@ -378,6 +378,132 @@ class ModelPreviewTests(unittest.TestCase):
         self.assertIsNotNone(particles_col)
         self.assertGreater(len(particles_col.objects), 0)
 
+    def test_feeding_camera_and_spreader_waterline_calibrations_preserved(self):
+        """Verify feeding camera and spreader waterline lift are strictly preserved during scene build."""
+        checked_blend = self.folder / "calibrated_rig.checked.blend"
+        final_blend = self.folder / "calibrated_rig.blend"
+
+        spreader_move_obj = _make_dummy_obj(self.folder / "spreader_move.obj")
+        spreader_still_obj = _make_dummy_obj(self.folder / "spreader_still.obj")
+
+        # 1. Generate preview scene with camera and spreader
+        preview_cfg = {
+            "model_path": str(self.dummy_model),
+            "water_level_z": 0.0,
+            "include_water": True,
+            "obj_models": [
+                {
+                    "path": str(spreader_move_obj),
+                    "name": "Spreader_Rotor",
+                    "position": [0.0, 0.0, 0.52],
+                },
+                {
+                    "path": str(spreader_still_obj),
+                    "name": "Spreader_Base",
+                    "position": [0.0, 0.0, 0.52],
+                },
+            ],
+            "feeding_camera": {
+                "enabled": True,
+                "position": [2.5, 0.0, -5.0],
+                "target": [0.0, 0.0, -5.0],
+                "visual_distance_m": 2.5,
+                "focal_length_mm": 32.0,
+                "show_frustum": True,
+                "show_camera_body": True,
+            },
+            "save_blend_path": str(checked_blend),
+            "setup_ui": False,
+        }
+        build_model_preview_scene(preview_cfg)
+        self.assertTrue(checked_blend.is_file())
+
+        # 2. Simulate user calibrating Feeding_Camera and Spreader lift in Blender
+        bpy.ops.wm.open_mainfile(filepath=str(checked_blend))
+        cam_obj = bpy.data.objects.get("Feeding_Camera")
+        self.assertIsNotNone(cam_obj)
+        # Move camera from -5.0 to -5.15 and apply custom rotation
+        cam_obj.location = Vector((2.5, 0.0, -5.15))
+        cam_obj.rotation_euler = Vector((0.05, 0.0, 0.1))
+
+        # Calibrate spreader lift from 0.52 to 0.65
+        rotor_obj = bpy.data.objects.get("Spreader_Rotor")
+        still_obj = bpy.data.objects.get("Spreader_Base")
+        self.assertIsNotNone(rotor_obj)
+        self.assertIsNotNone(still_obj)
+        rotor_obj.location = Vector((0.0, 0.0, 0.65))
+        still_obj.location = Vector((0.0, 0.0, 0.65))
+
+        bpy.ops.wm.save_as_mainfile(filepath=str(checked_blend))
+
+        # 3. Build unified scene with GUI defaults and wave heave active
+        pipeline_cfg = {
+            "model": str(self.dummy_model),
+            "output": str(final_blend),
+            "membrane_ids": [1],
+            "frames": 5,
+            "checked_blend_path": str(checked_blend),
+            "feeding_camera": {
+                "enabled": True,
+                "position": [2.5, 0.0, -5.0],  # GUI uncalibrated default
+                "target": [0.0, 0.0, -5.0],
+                "visual_distance_m": 2.5,
+                "focal_length_mm": 32.0,
+                "show_frustum": True,
+                "show_camera_body": True,
+            },
+            "feed_animation": {
+                "enabled": True,
+                "rpm": -30.0,
+                "mass_flow_kg_min": 10.0,
+                "spreader_z_offset": 0.52,  # GUI uncalibrated default
+                "spreader_heave_rao": 0.5,
+                "wave_height_m": 0.3,
+                "wave_period_s": 5.0,
+                "wave_length_m": 25.0,
+                "spreader_move_path": str(spreader_move_obj),
+                "spreader_still_path": str(spreader_still_obj),
+            },
+            "environment": {
+                "enabled": True,
+                "wave_height_m": 0.3,
+                "wave_period_s": 5.0,
+                "wave_length_m": 25.0,
+                "water_level_m": 0.0,
+            },
+        }
+        build_unified_scene(pipeline_cfg)
+        self.assertTrue(final_blend.is_file())
+
+        # 4. Open final build scene and verify strict calibration preservation
+        bpy.ops.wm.open_mainfile(filepath=str(final_blend))
+        final_cam = bpy.data.objects.get("Feeding_Camera")
+        self.assertIsNotNone(final_cam)
+        # Position must be preserved at -5.15 (not reverted to GUI default -5.0)
+        self.assertAlmostEqual(final_cam.location.x, 2.5, places=3)
+        self.assertAlmostEqual(final_cam.location.y, 0.0, places=3)
+        self.assertAlmostEqual(final_cam.location.z, -5.15, places=3)
+        self.assertAlmostEqual(final_cam.rotation_euler.x, 0.05, places=3)
+        self.assertAlmostEqual(final_cam.rotation_euler.z, 0.1, places=3)
+
+        # Feeding Camera Body must be attached without being deleted or offset arbitrarily
+        final_body = bpy.data.objects.get("Feeding_Camera_Body")
+        self.assertIsNotNone(final_body)
+        self.assertEqual(final_body.parent, final_cam)
+
+        # Spreader Rotor and Base must maintain 0.65m lift and heave around it
+        final_rotor = bpy.data.objects.get("Feed_Rotor_30RPM")
+        self.assertIsNotNone(final_rotor)
+        # Heave keyframes must oscillate around calibrated Z = 0.65 (always > 0.45, never near 0)
+        final_spreader_rotor = bpy.data.objects.get("Spreader_Rotor")
+        self.assertIsNotNone(final_spreader_rotor)
+        self.assertEqual(final_spreader_rotor.parent, final_rotor)
+
+        final_spreader_base = bpy.data.objects.get("Spreader_Base")
+        self.assertIsNotNone(final_spreader_base)
+        # At frame 1, base should be around 0.65 + heave, strictly well above water (Z > 0.45)
+        self.assertGreater(final_spreader_base.location.z, 0.45)
+
 
 if __name__ == "__main__":
     argv = [sys.argv[0]]

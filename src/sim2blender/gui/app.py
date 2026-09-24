@@ -1515,31 +1515,38 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                 'rotation': [0.0, 0.0, 0.0],
             })
 
-        # 3. Feeding camera 3D body model
-        if (hasattr(self, 'opt_feeding_camera') and self.opt_feeding_camera.isChecked() and
-            hasattr(self, 'feedcam_show_body') and self.feedcam_show_body.isChecked()):
+        # 3. Feeding camera configuration
+        feeding_camera_dict = None
+        if hasattr(self, 'opt_feeding_camera') and self.opt_feeding_camera.isChecked():
             cam_model = self.feedcam_model_edit.text().strip() if hasattr(self, 'feedcam_model_edit') else ''
             if not cam_model:
                 cam_model = str(PROJECT_ROOT / 'assets' / 'camera' / 'camera.obj')
-            if cam_model and Path(cam_model).is_file():
-                cam_pos = [
+            feeding_camera_dict = {
+                'enabled': True,
+                'position': [
                     float(self.feedcam_pos_x.value()) if hasattr(self, 'feedcam_pos_x') else 2.5,
                     float(self.feedcam_pos_y.value()) if hasattr(self, 'feedcam_pos_y') else 0.0,
                     float(self.feedcam_pos_z.value()) if hasattr(self, 'feedcam_pos_z') else -5.0,
-                ]
-                obj_models.append({
-                    'path': str(Path(cam_model).resolve()),
-                    'name': 'Feeding_Camera_Body',
-                    'position': cam_pos,
-                    'rotation': [0.0, 0.0, 0.0],
-                    'scale': 0.001,
-                })
+                ],
+                'target': [
+                    float(self.feedcam_target_x.value()) if hasattr(self, 'feedcam_target_x') else 0.0,
+                    float(self.feedcam_target_y.value()) if hasattr(self, 'feedcam_target_y') else 0.0,
+                    float(self.feedcam_target_z.value()) if hasattr(self, 'feedcam_target_z') else -5.0,
+                ],
+                'visual_distance_m': float(self.feedcam_visual_dist.value()) if hasattr(self, 'feedcam_visual_dist') else 2.5,
+                'clip_start_m': float(self.feedcam_clip_start.value()) if hasattr(self, 'feedcam_clip_start') else 0.01,
+                'focal_length_mm': float(self.feedcam_focal_length.value()) if hasattr(self, 'feedcam_focal_length') else 32.0,
+                'show_frustum': self.feedcam_show_frustum.isChecked() if hasattr(self, 'feedcam_show_frustum') else True,
+                'show_counter': self.feedcam_show_counter.isChecked() if hasattr(self, 'feedcam_show_counter') else True,
+                'show_camera_body': self.feedcam_show_body.isChecked() if hasattr(self, 'feedcam_show_body') else True,
+                'camera_body_obj_path': cam_model,
+            }
 
         # 4. Additional custom OBJ models
         if hasattr(self, 'get_extra_obj_models'):
             obj_models.extend(self.get_extra_obj_models())
 
-        if not has_cage and not obj_models:
+        if not has_cage and not obj_models and not feeding_camera_dict:
             QMessageBox.information(
                 self, 'No 3D Models Configured',
                 'Please select an AquaSim model (.amodel) or configure OBJ models to preview.'
@@ -1568,6 +1575,9 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             mtl_status = 'Found' if mtl.is_file() else 'None (default shading)'
             self.log.appendPlainText(f"  • {m['name']}: {p.name} (MTL: {mtl_status}) at {m['position']}")
 
+        if feeding_camera_dict:
+            self.log.appendPlainText(f"  • Feeding Camera: Pos={feeding_camera_dict['position']} Target={feeding_camera_dict['target']} (Frustum + Body)")
+
         self.log.appendPlainText(f'Checked Scene Target: {checked_blend_path.name}')
         self.log.appendPlainText('💡 TIP: In Blender, adjust model positions, rotations, colors, or materials,')
         self.log.appendPlainText('   then press Ctrl+S (or click "💾 Save Checked Scene" in the N-panel).')
@@ -1582,6 +1592,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
             'water_level_z': water_level,
             'include_water': True,
             'obj_models': obj_models,
+            'feeding_camera': feeding_camera_dict,
             'setup_ui': True,
             'setup_lighting': True,
             'save_blend_path': str(checked_blend_path.resolve()),
@@ -1599,8 +1610,9 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         ]
 
         ok, _ = QProcess.startDetached(str(blender_path), args, str(PROJECT_ROOT))
+        cam_desc = ' + Camera' if feeding_camera_dict else ''
         if ok:
-            self.status.setText(f'Launched Blender 3D Model Inspector ({len(obj_models)} OBJs + cage)')
+            self.status.setText(f'Launched Blender 3D Model Inspector ({len(obj_models)} OBJs{cam_desc} + cage)')
         else:
             QMessageBox.warning(self, 'Launch Failed', 'Could not launch Blender for 3D model preview.')
 

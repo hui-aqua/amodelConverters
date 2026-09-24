@@ -172,8 +172,9 @@ def find_spreader_outlet_tip(spreader_obj: bpy.types.Object) -> Vector:
     if spreader_obj.type == "MESH" and spreader_obj.data.vertices:
         matrix = spreader_obj.matrix_world
         world_verts = [matrix @ v.co for v in spreader_obj.data.vertices]
+        center = matrix.translation
 
-        radii = [math.hypot(v.x, v.y) for v in world_verts]
+        radii = [math.hypot(v.x - center.x, v.y - center.y) for v in world_verts]
         max_r = max(radii)
 
         tip_verts = [v for v, r in zip(world_verts, radii) if r >= max_r - 0.05]

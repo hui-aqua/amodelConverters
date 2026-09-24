@@ -481,7 +481,7 @@ class VIEW3D_PT_Sim2BlenderModelInspector(bpy.types.Panel):
             is_active = (obj == active_obj)
 
             r_title = box.row(align=True)
-            icon = "MESH_CUBE" if obj.get("is_preview_obj") else "GRID"
+            icon = "CAMERA_DATA" if obj.type == "CAMERA" else ("MESH_CUBE" if obj.get("is_preview_obj") else "GRID")
             r_title.label(text=obj.name, icon=icon)
             op_focus = r_title.operator("sim2blender.focus_model", text="", icon="VIEWZOOM")
             op_focus.object_name = obj.name
@@ -491,7 +491,10 @@ class VIEW3D_PT_Sim2BlenderModelInspector(bpy.types.Panel):
             dim = bounds["dimensions"]
             col_info = box.column(align=True)
             col_info.label(text=f"Pos: ({obj.location.x:+.3f}, {obj.location.y:+.3f}, {obj.location.z:+.3f}) m")
-            col_info.label(text=f"Size: {dim[0]:.2f} × {dim[1]:.2f} × {dim[2]:.2f} m ({bounds['vertex_count']} verts)")
+            if obj.type == "CAMERA" and hasattr(obj.data, "lens"):
+                col_info.label(text=f"Lens: {obj.data.lens:.1f} mm | Clip: {obj.data.clip_start:.2f}–{obj.data.clip_end:.1f} m")
+            else:
+                col_info.label(text=f"Size: {dim[0]:.2f} × {dim[1]:.2f} × {dim[2]:.2f} m ({bounds['vertex_count']} verts)")
 
             # Material and Color Status
             mats = inspect_object_materials(obj)
@@ -608,8 +611,25 @@ def build_model_preview_scene(config: dict[str, Any]) -> dict[str, Any]:
         )
         created_obj_models.extend(imported)
 
+    # Feeding camera rig preview (authentic camera, frustum volume, and housing body)
+    created_cam_objs = []
+    feed_cam_cfg = config.get("feeding_camera")
+    if feed_cam_cfg and feed_cam_cfg.get("enabled", True):
+        from sim2blender.blender.feeding_camera import setup_feeding_camera
+        cam_obj, frustum_obj, hud_obj = setup_feeding_camera(feed_cam_cfg, bpy.context.scene)
+        for o in (cam_obj, frustum_obj, hud_obj):
+            if o is not None:
+                o["is_preview_obj"] = True
+                created_cam_objs.append(o)
+        body_name = cam_obj.get("camera_body") if cam_obj else None
+        if body_name:
+            body_obj = bpy.data.objects.get(body_name)
+            if body_obj is not None:
+                body_obj["is_preview_obj"] = True
+                created_cam_objs.append(body_obj)
+
     # Compute overall bounding box for framing
-    all_preview_objs = created_cage_objs + created_obj_models
+    all_preview_objs = created_cage_objs + created_obj_models + created_cam_objs
     all_pts = []
     for obj in all_preview_objs:
         if obj.data and hasattr(obj.data, "vertices"):
@@ -636,6 +656,7 @@ def build_model_preview_scene(config: dict[str, Any]) -> dict[str, Any]:
     summary = {
         "cage_objects": [o.name for o in created_cage_objs],
         "obj_objects": [o.name for o in created_obj_models],
+        "camera_objects": [o.name for o in created_cam_objs],
         "water_surface": water_obj.name if water_obj else None,
         "center": tuple(center),
         "radius": radius,
@@ -674,7 +695,11 @@ def import_checked_models_from_blend(
     def _is_scaffolding(name: str) -> bool:
         if any(name.startswith(pfx) for pfx in scaffolding_prefixes):
             return True
-        if name in ("Cube", "Light", "Camera", "Membrane cage") or name.startswith("Cube.") or name.startswith("Light.") or name.startswith("Camera."):
+        if name in ("Cube", "Light", "Camera", "Membrane cage"):
+            return True
+        if name.startswith("Cube.") or name.startswith("Light."):
+            return True
+        if (name == "Camera" or name.startswith("Camera.")) and not name.startswith("Camera_LookAt"):
             return True
         return False
 
@@ -686,6 +711,7 @@ def import_checked_models_from_blend(
             if obj.name not in target_col.objects:
                 target_col.objects.link(obj)
             obj["is_calibrated"] = True
+        bpy.context.view_layer.update()
         return matching_objs
 
     with bpy.data.libraries.load(str(path), link=False) as (data_from, data_to):
@@ -701,4 +727,5 @@ def import_checked_models_from_blend(
         obj["is_calibrated"] = True
         imported_objs.append(obj)
 
+    bpy.context.view_layer.update()
     return imported_objs

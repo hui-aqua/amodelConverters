@@ -69,6 +69,8 @@ def map_nodes(model, results):
     """Match model coordinates to the export's three-decimal initial positions.
 
     VID is a solver index, not an AModel node ID. Never silently use it as one.
+    Prefer exact rounded matches; otherwise allow one export unit (0.001 m)
+    per axis to account for differences in saved model/export precision.
     """
     lookup = {}
     for vid, point in results.positions[0].items():
@@ -76,8 +78,18 @@ def map_nodes(model, results):
     mapping = {}
     for nid, node in model.nodes.items():
         candidates = lookup.get(tuple(round(v, 3) for v in node.point), [])
+        if not candidates:
+            candidates = [
+                vid for vid, point in results.positions[0].items()
+                if all(abs(a - b) <= 0.001 + 1e-9
+                       for a, b in zip(node.point, point))
+            ]
         if len(candidates) != 1:
-            raise ValueError(f'Model node {nid}: expected one initial-position match, got {candidates}')
+            raise ValueError(
+                f'Model node {nid} at {node.point}: expected one initial-position '
+                f'match within 0.001 m per axis, got {candidates}. '
+                'Use results exported from the same model with its initial positions included.'
+            )
         mapping[nid] = candidates[0]
     if len(set(mapping.values())) != len(mapping):
         raise ValueError('Multiple model nodes match the same result VID')

@@ -131,6 +131,7 @@ def build_unified_scene(config: dict) -> None:
     cage = mesh_object("Membrane cage", points, [], faces, collection)
     cage["source_file"] = str(model_path)
     cage["virtual_cap_count"] = len(caps)
+    cage['containment_cap_openings'] = cap_openings
     cage["active"] = True
 
     material = bpy.data.materials.new("Net strands")
@@ -164,6 +165,8 @@ def build_unified_scene(config: dict) -> None:
 
         print(f"GUI_STAGE: Replaying AquaSim structural motion from {results_path.name}…", flush=True)
         results = read_results(results_path)
+        print(f'GUI_STAGE: Matching {len(model.nodes)} nodes to '
+              f'{len(results.times)} AquaSim samples…', flush=True)
         mapping = map_nodes(model, results)
 
         step_sec = wave_timing(len(results.times), wave_period, frames_per_wave, fps)["step_seconds"]
@@ -175,6 +178,8 @@ def build_unified_scene(config: dict) -> None:
         scene.render.fps_base = 1
 
         # Apply animated shape keys to Membrane cage
+        print(f'GUI_STAGE: Animating net ({len(ids)} nodes, '
+              f'{len(results.times)} samples)…', flush=True)
         for step, positions in enumerate(results.positions):
             key = cage.shape_key_add(name=f"Time_{results.times[step]:.4f}")
             key.interpolation = "KEY_LINEAR"
@@ -189,16 +194,19 @@ def build_unified_scene(config: dict) -> None:
 
         if keys.animation_data and keys.animation_data.action:
             action = keys.animation_data.action
-            curves = getattr(action, "fcurves", [])
+            from sim2blender.blender.animation import action_fcurves
+            curves = action_fcurves(action)
             for curve in curves:
                 for pt in curve.keyframe_points:
                     pt.interpolation = "LINEAR"
 
-        # Build passive members
+        # Replay every selected structural member on the same timeline as the net.
         member_tags = tuple(t for t in ("beam", "truss") if any(c["component_tag"] == t for c in model.cells))
         if member_tags:
-            geometry_report += build_members(model, collection, tags=member_tags)
-            rigid_beams(collection)
+            geometry_report += build_members(
+                model, collection, tags=member_tags,
+                replay=(results, mapping, replay_frames),
+            )
 
         scene["source_times"] = results.times
         scene["source_frames"] = replay_frames
@@ -322,7 +330,9 @@ def build_unified_scene(config: dict) -> None:
     if checked_blend and Path(checked_blend).is_file():
         print(f"GUI_STAGE: Importing calibrated models from {Path(checked_blend).name}…", flush=True)
         from sim2blender.blender.model_preview import import_checked_models_from_blend
-        imported_calibrated = import_checked_models_from_blend(checked_blend, equip_col)
+        imported_calibrated = import_checked_models_from_blend(
+            checked_blend, equip_col, include_feeding_camera=use_feeding_camera,
+        )
         print(f"Imported {len(imported_calibrated)} calibrated model(s): {[o.name for o in imported_calibrated]}", flush=True)
 
     # Import any configured extra OBJ models not already present
@@ -451,6 +461,10 @@ def build_unified_scene(config: dict) -> None:
     scene.frame_set(1)
     setup_view(scene, points, collection)
     apply_visualization(scene, cage)
+    if use_replay and replay_cfg.get('clip_enabled', False):
+        print('GUI_STAGE: Applying horizontal replay visibility mask…', flush=True)
+        from sim2blender.blender.clipping import apply_height_mask
+        apply_height_mask(scene, replay_cfg.get('clip_z_m', 0.26))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     report_path = output_path.with_suffix(".geometry.json")

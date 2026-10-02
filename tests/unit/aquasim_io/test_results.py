@@ -49,6 +49,28 @@ class ResultsTests(unittest.TestCase):
             with self.subTest(rows=rows), self.assertRaises(ValueError):
                 self.read(rows)
 
+    def test_export_precision_tolerance(self):
+        model = Model({1276: Node(1276, (-34.797, 3.455, -39.462), (True,)*3)}, [])
+        result = self.read('0 1204 -34.797 3.455 -39.461\n')
+        self.assertEqual(map_nodes(model, result), {1276: 1204})
+
+    def test_tolerance_rejects_ambiguous_or_distant_matches(self):
+        model = Model({73: Node(73, (0, 0, 0), (True,)*3)}, [])
+        for rows in ('0 1 0.001 0 0\n0 2 -0.001 0 0\n',
+                     '0 1 0.0011 0 0\n'):
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                map_nodes(model, self.read(rows))
+
+    def test_exact_match_preferred_over_tolerance(self):
+        model = Model({73: Node(73, (0, 0, 0), (True,)*3)}, [])
+        self.assertEqual(map_nodes(model, self.read('0 1 0 0 0\n0 2 0.001 0 0\n')), {73: 1})
+
+    def test_tolerance_cannot_reuse_vid(self):
+        model = Model({i: Node(i, (x, 0, 0), (True,)*3)
+                       for i, x in ((7, 0), (8, 0.001))}, [])
+        with self.assertRaises(ValueError):
+            map_nodes(model, self.read('0 1 0 0 0\n'))
+
     def test_reject_ambiguous_and_missing_matches(self):
         model = Model({73: Node(73, (0, 0, 0), (True,)*3)}, [])
         for rows in ('0 1 1 0 0\n', '0 1 0 0 0\n0 2 0 0 0\n'):

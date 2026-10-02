@@ -245,6 +245,25 @@ class ConfigTabsMixin:
         ft.addRow('Cyclic Motion', self.replay_loop)
         v.addWidget(gb_timeline)
 
+        gb_clip = QGroupBox('Horizontal visibility mask')
+        fc = QFormLayout(gb_clip)
+        self.replay_clip_enabled = QCheckBox('Hide geometry above Z height')
+        self.replay_clip_enabled.setChecked(True)
+        self.replay_clip_z = QDoubleSpinBox()
+        self.replay_clip_z.setDecimals(3)
+        self.replay_clip_z.setRange(-100000, 100000)
+        self.replay_clip_z.setSingleStep(0.01)
+        self.replay_clip_z.setSuffix(' m')
+        self.replay_clip_z.setValue(0.26)
+        self.replay_clip_enabled.toggled.connect(self.replay_clip_z.setEnabled)
+        fc.addRow(self.replay_clip_enabled)
+        fc.addRow('World Z height', self.replay_clip_z)
+        note = QLabel('Keeps portions below the plane visible during replay. '
+                      'Visible in Material Preview and Rendered views; cuts are not capped.')
+        note.setWordWrap(True)
+        fc.addRow(note)
+        v.addWidget(gb_clip)
+
         v.addStretch()
         self.tab_config.addTab(tab, '🌊 Replay')
 

@@ -676,12 +676,14 @@ def build_model_preview_scene(config: dict[str, Any]) -> dict[str, Any]:
 def import_checked_models_from_blend(
     checked_blend_path: str | Path,
     target_collection: bpy.types.Collection | None = None,
+    *, include_feeding_camera: bool = True,
 ) -> list[bpy.types.Object]:
     """Import user-calibrated 3D models and materials from a checked Blender file.
 
     Preserves user-customized transforms (location, rotation, scale), materials,
     colors, shaders, and textures while omitting temporary preview scaffolding
     (preview cage mesh, preview water plane, studio lights, preview camera).
+    Set include_feeding_camera=False to omit a saved feeding rig when disabled.
     """
     path = Path(checked_blend_path).resolve()
     if not path.is_file():
@@ -693,6 +695,8 @@ def import_checked_models_from_blend(
     scaffolding_prefixes = ("Cage_", "Preview_", "Constraint node")
 
     def _is_scaffolding(name: str) -> bool:
+        if not include_feeding_camera and name.startswith("Feeding_Camera"):
+            return True
         if any(name.startswith(pfx) for pfx in scaffolding_prefixes):
             return True
         if name in ("Cube", "Light", "Camera", "Membrane cage"):

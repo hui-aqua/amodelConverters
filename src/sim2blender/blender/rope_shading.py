@@ -60,6 +60,7 @@ def preprocess_rope_segments(objects=None):
             report['processed']+=1
             continue
         if (obj.library or mesh.library or mesh.is_editmode or not mesh.polygons or mesh.shape_keys
+                or obj.get('motion_source') == 'AquaSim results'
                 or any(u not in selected or not eligible(u) or u.library for u in users[mesh])
                 or (mesh.has_custom_normals and not mesh.get('aquasim_radial_rope_normals'))):
             report['skipped']+=1

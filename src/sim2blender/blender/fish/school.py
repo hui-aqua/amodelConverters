@@ -187,20 +187,12 @@ def cleanup_existing_fish_school() -> None:
 def find_membrane_cage_object() -> bpy.types.Object:
     """Find the cage mesh object representing the fish containment boundary."""
     import bpy
-    collection = bpy.data.collections.get("AModel cage")
-    if collection is not None:
-        obj = collection.objects.get("Membrane cage")
-        if obj is not None:
-            return obj
-        for o in collection.objects:
-            if o.type == "MESH" and ("membrane" in o.name.lower() or "cage" in o.name.lower()):
-                return o
-
-    obj = bpy.data.objects.get("Membrane cage")
+    objects = bpy.context.scene.objects
+    obj = objects.get("Membrane cage")
     if obj is not None:
         return obj
 
-    for o in bpy.data.objects:
+    for o in objects:
         if o.type == "MESH" and ("membrane" in o.name.lower() or "cage" in o.name.lower()):
             return o
 
@@ -208,18 +200,11 @@ def find_membrane_cage_object() -> bpy.types.Object:
 
 
 def build_enclosure_from_cage(cage_obj: bpy.types.Object) -> Enclosure:
-    """Construct a 3D BVH Enclosure from the cage mesh geometry for boundary checking."""
-    from sim2blender.blender.enclosure import Enclosure, boundary_caps, stitch_membrane_seams
-    mesh = cage_obj.data
-    matrix = cage_obj.matrix_world
-    points = [matrix @ v.co for v in mesh.vertices]
-    faces = [tuple(p.vertices) for p in mesh.polygons]
-    faces_stitched = stitch_membrane_seams(faces, points)
-    try:
-        caps = boundary_caps(faces_stitched, points, allow_caps=True)
-    except Exception:
-        caps = []
-    return Enclosure(points, faces_stitched + caps)
+    """Read the current physical shell, including replay/cloth deformation."""
+    import bpy
+    from sim2blender.blender.fish.boundary import AnimatedCageBoundary
+    with AnimatedCageBoundary(cage_obj) as boundary:
+        return boundary.enclosure_at(bpy.context.scene.frame_current_final)
 
 
 class SpatialGrid3D:
@@ -280,7 +265,7 @@ def limit_turn_angle(v_current, desired_dir, max_turn_rad: float):
 
 
 def project_inside_enclosure(pos, clearance: float, enclosure: Enclosure, cage_center):
-    """Smoothly project a position inside the enclosure along the inward wall normal without teleporting."""
+    """Try a wall correction; callers must verify the result if projection fails."""
     from mathutils import Vector
     if enclosure.contains(pos, clearance):
         return pos
@@ -293,9 +278,12 @@ def project_inside_enclosure(pos, clearance: float, enclosure: Enclosure, cage_c
         if inward.length < 1e-6:
             inward = Vector((0.0, 0.0, 1.0))
         inward.normalize()
-        projected = hit_pos + inward * (clearance + enclosure.epsilon * 4.0)
-        if enclosure.contains(projected, clearance):
-            return projected
+        # A moving wall may have overtaken the fish: pos-hit then points out.
+        # Test both sides instead of relying on mesh winding or an interior center.
+        for sign in (1, -1):
+            projected = hit_pos + inward * (sign * (clearance + enclosure.epsilon * 4.0))
+            if enclosure.contains(projected, clearance):
+                return projected
         towards_center = (cage_center - pos).normalized()
         for step in (clearance * 0.5, clearance, clearance * 2.0):
             test_p = projected + towards_center * step
@@ -309,6 +297,15 @@ def project_inside_enclosure(pos, clearance: float, enclosure: Enclosure, cage_c
 
 
 def run_fish_schooling(config: dict | None = None) -> None:
+    """Bake schooling against the animated physical cage boundary."""
+    import bpy
+    from sim2blender.blender.fish.boundary import AnimatedCageBoundary
+    bpy.context.scene.frame_set(bpy.context.scene.frame_start)
+    with AnimatedCageBoundary(find_membrane_cage_object()) as boundary:
+        _run_fish_schooling(config, boundary)
+
+
+def _run_fish_schooling(config, boundary):
     """Execute high-performance biological Boids fish schooling simulation with strict constant population."""
     import bpy
     from mathutils import Vector
@@ -379,8 +376,7 @@ def run_fish_schooling(config: dict | None = None) -> None:
     # 1. Clean up previously generated fish to guarantee exact N fish
     cleanup_existing_fish_school()
 
-    cage_obj = find_membrane_cage_object()
-    enclosure = build_enclosure_from_cage(cage_obj)
+    enclosure, wall_travel = boundary.for_frame(frame_start)
     cage_center = (enclosure.low + enclosure.high) * 0.5
 
     rng = random.Random(seed)
@@ -388,7 +384,7 @@ def run_fish_schooling(config: dict | None = None) -> None:
     scene.collection.children.link(school_collection)
 
     template_mesh = salmon_mesh(mean_length)
-    base_clearance = max(v.co.length for v in template_mesh.vertices) + mean_length * 1e-5 + wall_buffer
+    base_clearance = max(v.co.length for v in template_mesh.vertices) + mean_length * 1e-5
 
     fish_objects: list[bpy.types.Object] = []
     positions: list[Vector] = []
@@ -404,7 +400,10 @@ def run_fish_schooling(config: dict | None = None) -> None:
         length_i = max(min_length, min(max_length, raw_length))
 
         cruise_speed_i = speed_bl * length_i
-        clearance_i = base_clearance * (length_i / mean_length)
+        ratio = length_i / mean_length
+        clearance_i = base_clearance * ratio + wall_buffer
+        if tail_motion_enabled:
+            clearance_i += abs(tail_amp) * ratio**2
 
         fish_cruise_speeds.append(cruise_speed_i)
         fish_clearances.append(clearance_i)
@@ -417,18 +416,19 @@ def run_fish_schooling(config: dict | None = None) -> None:
         fish_obj.scale = (scale_ratio, scale_ratio, scale_ratio)
         fish_obj["fish_species"] = species_name
         fish_obj["fish_length_m"] = length_i
+        fish_obj['fish_clearance_radius'] = clearance_i
         if tail_motion_enabled:
             from sim2blender.blender.fish.tail_motion import apply_fish_tail_motion
             apply_fish_tail_motion(
                 fish_obj,
                 amplitude_m=tail_amp * (length_i / mean_length),
-                frequency_hz=tail_freq * (cruise_speed_i / (speed_bl * mean_length)),
+                frequency_hz=tail_freq * ratio,
                 phase_offset=rng.uniform(0.0, math.tau),
                 wavelength_m=length_i * 1.0,
             )
         fish_objects.append(fish_obj)
 
-        pos = enclosure.sample(rng, clearance_i)
+        pos = enclosure.sample(rng, clearance_i + wall_travel)
         positions.append(pos)
 
         angle = rng.uniform(0, math.tau)
@@ -441,6 +441,13 @@ def run_fish_schooling(config: dict | None = None) -> None:
     # 4. Deterministic Simulation Loop Across All Frames
     for frame in range(frame_start, frame_end + 1):
         scene.frame_set(frame)
+        enclosure, wall_travel = boundary.for_frame(frame)
+        cage_center = (enclosure.low + enclosure.high) * 0.5
+        from sim2blender.blender.fish.boundary import safe_fish_position
+        # Correct for moving walls before neighbor lookup and steering.
+        for i, position in enumerate(positions):
+            positions[i] = safe_fish_position(
+                position, fish_clearances[i] + wall_travel, enclosure, rng)
         elapsed_s = (frame - frame_start) / fps if fps > 0 else 0.0
 
         # Insert all fish positions into spatial grid for this time step
@@ -451,7 +458,7 @@ def run_fish_schooling(config: dict | None = None) -> None:
         for i, fish_obj in enumerate(fish_objects):
             p = positions[i]
             v = velocities[i]
-            clearance_i = fish_clearances[i]
+            clearance_i = fish_clearances[i] + wall_travel
 
             # (A) Boids Flocking Forces
             f_sep = Vector((0.0, 0.0, 0.0))
@@ -567,14 +574,17 @@ def run_fish_schooling(config: dict | None = None) -> None:
             step_length = total_step.length
             final_dir = total_step.normalized() if step_length > 1e-6 else limited_dir
 
-            # (I) Boundary Safe Update (Zero Teleportation, Zero Birth/Death)
+            # (I) Boundary-safe update against the current deforming net.
             target_p = p + total_step
             if enclosure.contains(p, clearance_i + step_length) and enclosure.contains(target_p, clearance_i):
                 p = target_p
             else:
                 # Continuous boundary projection
-                p = project_inside_enclosure(target_p, clearance_i, enclosure, cage_center)
+                p = safe_fish_position(target_p, clearance_i, enclosure, rng)
                 final_dir = (p - positions[i]).normalized() if (p - positions[i]).length > 1e-6 else limited_dir
+
+            if not enclosure.contains(p, clearance_i):
+                raise ValueError(f'Fish {i+1} cannot fit inside the moving net at frame {frame}')
 
             positions[i] = p
             velocities[i] = final_dir
@@ -591,7 +601,8 @@ def run_fish_schooling(config: dict | None = None) -> None:
     for fish_obj in fish_objects:
         if fish_obj.animation_data and fish_obj.animation_data.action:
             action = fish_obj.animation_data.action
-            curves = getattr(action, "fcurves", [])
+            from sim2blender.blender.animation import action_fcurves
+            curves = action_fcurves(action)
             for curve in curves:
                 for keypoint in curve.keyframe_points:
                     keypoint.interpolation = "CONSTANT"
@@ -599,6 +610,7 @@ def run_fish_schooling(config: dict | None = None) -> None:
     scene["fish_count"] = count
     scene["fish_length_mean_m"] = mean_length
     scene["fish_length_std_m"] = std_length
+    scene['fish_boundary_source'] = 'Evaluated membrane with moving-wall clearance'
 
 
 

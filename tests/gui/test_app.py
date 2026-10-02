@@ -28,6 +28,23 @@ def until(predicate,timeout=30):
 
 
 class GuiTests(unittest.TestCase):
+    def test_replay_clip_controls_and_persistence(self):
+        w = self.window
+        self.assertTrue(w.replay_clip_enabled.isChecked())
+        self.assertAlmostEqual(w.replay_clip_z.value(), 0.26)
+        w.replay_clip_z.setValue(-0.75)
+        w.replay_clip_enabled.setChecked(False)
+        self.assertFalse(w.replay_clip_z.isEnabled())
+        w.close()
+        restored = MainWindow(self.folder/'settings.ini')
+        try:
+            self.assertFalse(restored.replay_clip_enabled.isChecked())
+            self.assertAlmostEqual(restored.replay_clip_z.value(), -0.75)
+        finally:
+            until(lambda:not restored.workers)
+            restored.close()
+            restored.deleteLater()
+
     def test_jonswap_controls_and_persistence(self):
         w = self.window
         self.assertEqual(w.env_wave_type.currentData(), 'regular')

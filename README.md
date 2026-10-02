@@ -70,12 +70,28 @@ Omit `--add-fish` for structural replay alone. Add `--membrane-ids` when the fis
 
 ## Replay timing: one clock for the cage and fish
 
+In the GUI **Replay** tab, **Horizontal visibility mask** hides the portions of
+scene geometry above an adjustable world Z height (default **0.26 m**). Lower
+portions remain visible as objects move. The mask works in **Material Preview**
+and **Rendered** views and in rendered output; Solid view displays the original
+geometry. Cut surfaces are not capped. Disable the checkbox to show the full scene.
+After building, adjust `replay_clip_z_m` or toggle `replay_clip_enabled` under
+Blender **Scene Properties → Custom Properties**, without rebuilding. Unified
+pipeline JSON accepts `replay.clip_enabled` and `replay.clip_z_m`; existing JSON
+without the enable flag keeps its full-scene view.
+
 - The application reads the number of structural samples from `out.txt`; node rows are not counted as separate frames.
 - **Sample interval = wave period / source frames per wave.** Source frames per wave means exported structural intervals, not video frames.
 - **Structural duration = (sample count - 1) * sample interval.** The first sample is at time zero.
 - Fish and structure share the same video FPS, interpolated cage positions and frame range. The GUI shows source frames, duration, video/fish frames, and final-frame rounding.
 
 Enter the actual AquaSim wave settings; physical wave period cannot be inferred from dimensionless Time labels. Rebuild both motion and fish after changing timing. **[Timing details and examples](docs/guides/timing.md)**.
+
+Schooling and feeding fish use the evaluated, moving membrane shell each frame,
+with clearance for the whole fish, tail motion and wall movement between frames.
+Virtual opening caps follow the same membrane nodes. Net strand display and the
+height mask do not change this physical containment boundary. Invalid shells or
+insufficient room for a fish cause the build to stop instead of saving escaped fish.
 
 ## Where files belong
 

@@ -69,7 +69,7 @@ def member_mesh(start, end, geometry, point3=None):
     return points,faces,fallback
 
 
-def build_members(model, collection, tags=('beam', 'truss')):
+def build_members(model, collection, tags=('beam', 'truss'), *, replay=None):
     import bpy
     import bmesh
     from collections import defaultdict
@@ -78,15 +78,27 @@ def build_members(model, collection, tags=('beam', 'truss')):
         if c['component_tag'] in tags:
             groups[(c['component_tag'],c['component_id'])].append(c)
     report=[]
-    for (tag,cid),cells in groups.items():
+    for component_number, ((tag,cid),cells) in enumerate(groups.items(), 1):
+        if replay is not None:
+            print(f'GUI_STAGE: Replaying {tag} component {cid} '
+                  f'({component_number}/{len(groups)}, {len(cells)} elements)…', flush=True)
         geometry=cells[0]['geometry']
         vertices,faces,edges,element_ids=[],[],[],[]
         fallback_count=0
+        bindings=[]
         for cell in cells:
             a,b=(model.nodes[n].point for n in cell['nodes'])
             pts,polys,fallback=member_mesh(a,b,geometry,cell['point3'])
             offset=len(vertices)
             vertices.extend(pts)
+            if replay is not None:
+                from mathutils import Vector
+                x,y,z,_ = local_frame(a,b,cell['point3'])
+                length = (Vector(b)-Vector(a)).length
+                origin = Vector(a)
+                local = [((p-origin).dot(x)/length,
+                          (p-origin).dot(y), (p-origin).dot(z)) for p in pts]
+                bindings.append((cell, local))
             faces.extend(tuple(offset+i for i in f) for f in polys)
             if not polys:edges.append((offset,offset+1))
             element_ids.extend([cell['element_id']]*len(polys))
@@ -100,6 +112,8 @@ def build_members(model, collection, tags=('beam', 'truss')):
         bm.to_mesh(mesh);bm.free()
         obj=bpy.data.objects.new(f'{tag.title()} {cid}: {cells[0]["component_name"]}',mesh)
         collection.objects.link(obj)
+        if replay is not None:
+            _animate_member_sections(obj, model, bindings, *replay)
         obj['active']=True
         obj['component_id']=cid
         obj['component_type']=tag
@@ -118,6 +132,93 @@ def build_members(model, collection, tags=('beam', 'truss')):
         if tag=='truss':obj['rope_appearance']='Three helical surface lobes, nominal diameter envelope; visual lay limited to six turns per element.'
         report.append(dict(component_id=cid,name=cells[0]['component_name'],type=tag,elements=len(cells),orientation_fallback_count=fallback_count,**geometry))
     return report
+
+
+def _animate_member_sections(obj, model, bindings, results, mapping, frames):
+    """Animate four control points per element instead of every surface vertex.
+
+    Controls encode the two endpoints and unit section axes. A Geometry Nodes
+    modifier reconstructs the detailed mesh at playback time. Linear control
+    interpolation reproduces the previous surface-shape-key interpolation.
+    XYZ exports have no rotational DOFs, so retain the source section reference.
+    """
+    import bpy
+    from mathutils import Vector
+    from sim2blender.blender.animation import action_fcurves
+    mesh=bpy.data.meshes.new(f'{obj.name} replay controls')
+    mesh.from_pydata([(0,0,0)]*(4*len(bindings)),[],[])
+    control=bpy.data.objects.new(mesh.name,mesh)
+    obj.users_collection[0].objects.link(control)
+    control['replay_control']=True
+    control.hide_render=True
+    control.hide_set(True)
+    control.hide_select=True
+    for step, positions in enumerate(results.positions):
+        coords=[]
+        for cell, _ in bindings:
+            na,nb=cell['nodes']
+            a,b=(Vector(positions[mapping[n]]) for n in (na,nb))
+            point3=cell['point3']
+            if point3 is not None:
+                point3=Vector(point3)+a-Vector(model.nodes[na].point)
+            _,y,z,_=local_frame(a,b,point3)
+            for point in (a,b,a+y,a+z):
+                coords.extend(point)
+        key=control.shape_key_add(name=f'Time_{results.times[step]:.4f}')
+        key.interpolation='KEY_LINEAR'
+        key.data.foreach_set('co',coords)
+    keys=control.data.shape_keys
+    keys.use_relative=False
+    for frame,key in zip(frames,keys.key_blocks):
+        keys.eval_time=key.frame
+        keys.keyframe_insert('eval_time',frame=frame)
+    for curve in action_fcurves(keys.animation_data.action):
+        for point in curve.keyframe_points:
+            point.interpolation='LINEAR'
+    obj['motion_source']='AquaSim results'
+    obj['replay_control_object']=control.name
+
+    # Per-vertex bindings are static and stored only once.
+    attr=obj.data.attributes.new('replay_control_index','INT','POINT')
+    attr.data.foreach_set('value', [4*i for i, (_,local) in enumerate(bindings) for _ in local])
+    attr=obj.data.attributes.new('replay_section_coords','FLOAT_VECTOR','POINT')
+    attr.data.foreach_set('vector', [v for _,local in bindings for point in local for v in point])
+
+    group=bpy.data.node_groups.new(f'{obj.name} replay deformation','GeometryNodeTree')
+    group.interface.new_socket(name='Geometry',in_out='INPUT',socket_type='NodeSocketGeometry')
+    group.interface.new_socket(name='Geometry',in_out='OUTPUT',socket_type='NodeSocketGeometry')
+    n,l=group.nodes,group.links
+    inp=n.new('NodeGroupInput'); out=n.new('NodeGroupOutput')
+    info=n.new('GeometryNodeObjectInfo'); info.inputs['Object'].default_value=control
+    position=n.new('GeometryNodeInputPosition')
+    index=n.new('GeometryNodeInputNamedAttribute'); index.data_type='INT'
+    index.inputs['Name'].default_value='replay_control_index'
+    local=n.new('GeometryNodeInputNamedAttribute'); local.data_type='FLOAT_VECTOR'
+    local.inputs['Name'].default_value='replay_section_coords'
+    xyz=n.new('ShaderNodeSeparateXYZ'); l.new(local.outputs['Attribute'],xyz.inputs[0])
+    samples=[]
+    for offset in range(4):
+        add=n.new('ShaderNodeMath'); add.operation='ADD'; add.inputs[1].default_value=offset
+        l.new(index.outputs['Attribute'],add.inputs[0])
+        sample=n.new('GeometryNodeSampleIndex'); sample.data_type='FLOAT_VECTOR'; sample.domain='POINT'
+        l.new(info.outputs['Geometry'],sample.inputs['Geometry'])
+        l.new(position.outputs['Position'],sample.inputs['Value'])
+        l.new(add.outputs[0],sample.inputs['Index'])
+        samples.append(sample.outputs['Value'])
+    result=samples[0]
+    for end,weight in zip(samples[1:],xyz.outputs):
+        delta=n.new('ShaderNodeVectorMath'); delta.operation='SUBTRACT'
+        l.new(end,delta.inputs[0]); l.new(samples[0],delta.inputs[1])
+        scale=n.new('ShaderNodeVectorMath'); scale.operation='SCALE'
+        l.new(delta.outputs['Vector'],scale.inputs[0]); l.new(weight,scale.inputs['Scale'])
+        add=n.new('ShaderNodeVectorMath'); add.operation='ADD'
+        l.new(result,add.inputs[0]); l.new(scale.outputs['Vector'],add.inputs[1])
+        result=add.outputs['Vector']
+    deform=n.new('GeometryNodeSetPosition')
+    l.new(inp.outputs['Geometry'],deform.inputs['Geometry'])
+    l.new(result,deform.inputs['Position'])
+    l.new(deform.outputs['Geometry'],out.inputs['Geometry'])
+    obj.modifiers.new('AquaSim replay deformation','NODES').node_group=group
 
 
 def round_net(cage, membrane, node_ids):

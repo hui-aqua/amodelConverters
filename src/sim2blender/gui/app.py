@@ -442,6 +442,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.opt_replay.toggled.connect(self.replay_toggled)
         self.opt_schooling.toggled.connect(self.update_tab_headers)
         self.opt_feed.toggled.connect(self.update_tab_headers)
+        self.opt_feed.toggled.connect(self.update_check_models_button_state)
         self.opt_feeding.toggled.connect(self.update_tab_headers)
         self.opt_camera.toggled.connect(self.update_tab_headers)
         self.opt_feeding_camera.toggled.connect(self.update_tab_headers)
@@ -881,6 +882,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.replay_start_offset.setValue(self.settings.value('replay_start_offset', 0, type=int))
         self.replay_max_samples.setValue(self.settings.value('replay_max_samples', 0, type=int))
         self.replay_loop.setChecked(self.settings.value('replay_loop', False, type=bool))
+        self.replay_clip_enabled.setChecked(self.settings.value('replay_clip_enabled', True, type=bool))
+        self.replay_clip_z.setValue(self.settings.value('replay_clip_z', 0.26, type=float))
 
         # Fish Schooling
         self.opt_schooling.setChecked(self.settings.value('opt_schooling', True, type=bool))
@@ -1003,6 +1006,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         self.settings.setValue('replay_start_offset', self.replay_start_offset.value())
         self.settings.setValue('replay_max_samples', self.replay_max_samples.value())
         self.settings.setValue('replay_loop', self.replay_loop.isChecked())
+        self.settings.setValue('replay_clip_enabled', self.replay_clip_enabled.isChecked())
+        self.settings.setValue('replay_clip_z', self.replay_clip_z.value())
 
         self.settings.setValue('opt_schooling', self.opt_schooling.isChecked())
         self.settings.setValue('fish_count', self.fish_count.value())
@@ -1133,6 +1138,8 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
                     'start_offset': self.replay_start_offset.value(),
                     'max_samples': self.replay_max_samples.value(),
                     'loop': self.replay_loop.isChecked(),
+                    'clip_enabled': self.replay_clip_enabled.isChecked(),
+                    'clip_z_m': self.replay_clip_z.value(),
                 }
 
             schooling_dict = None
@@ -1455,8 +1462,10 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         """Enable the Check Models button if an AquaSim model or OBJ model is available."""
         has_model = bool(self.model.text().strip() and Path(self.model.text().strip()).is_file())
         has_spreader = bool(
+            self.opt_feed.isChecked() and (
             (hasattr(self, 'spreader_move_edit') and self.spreader_move_edit.text().strip() and Path(self.spreader_move_edit.text().strip()).is_file()) or
             (hasattr(self, 'spreader_still_edit') and self.spreader_still_edit.text().strip() and Path(self.spreader_still_edit.text().strip()).is_file())
+            )
         )
         has_feedcam = bool(
             hasattr(self, 'opt_feeding_camera') and self.opt_feeding_camera.isChecked() and
@@ -1497,7 +1506,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
         obj_models = []
         # 1. Spreader rotor
         move_obj = self.spreader_move_edit.text().strip() if hasattr(self, 'spreader_move_edit') else ''
-        if move_obj and Path(move_obj).is_file():
+        if self.opt_feed.isChecked() and move_obj and Path(move_obj).is_file():
             obj_models.append({
                 'path': str(Path(move_obj).resolve()),
                 'name': 'Spreader_Rotor',
@@ -1507,7 +1516,7 @@ class MainWindow(QMainWindow, ConfigTabsMixin):
 
         # 2. Spreader stationary base
         still_obj = self.spreader_still_edit.text().strip() if hasattr(self, 'spreader_still_edit') else ''
-        if still_obj and Path(still_obj).is_file():
+        if self.opt_feed.isChecked() and still_obj and Path(still_obj).is_file():
             obj_models.append({
                 'path': str(Path(still_obj).resolve()),
                 'name': 'Spreader_Base',
